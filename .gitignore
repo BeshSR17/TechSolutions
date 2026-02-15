@@ -1,2 +1,21 @@
-**/TS/
+# Dependencias de Node (Frontend)
 **/node_modules/
+dist/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Dependencias de Python (Backend)
+**/venv/
+**/.venv/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# SEGURIDAD - No subir las llaves de Supabase
+**/.env
+
+# Archivos de Sistema
+.DS_Store
+Thumbs.db
