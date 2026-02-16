@@ -16,14 +16,15 @@ supabase: Client = create_client(url, key)
 
 @app.route('/')
 def home():
-    return {"status": "API TechSolutions operando 🚀"}
+    return {"status": "API TechSolutions operando"}
 
 # --- SECCIÓN DE CLIENTES ---
 
 @app.route('/api/clientes', methods=['GET'])
 def get_clientes():
-    # Obtener todos los clientes ordenados por nombre
-    response = supabase.table("clientes").select("*").order("empresa").execute()
+    # El comando "*, proyectos(*)" le dice a Supabase: 
+    # "Traeme todo de clientes y de paso traeme sus proyectos relacionados"
+    response = supabase.table('clientes').select("*, proyectos(*)").execute()
     return jsonify(response.data)
 
 @app.route('/api/clientes', methods=['POST'])
@@ -32,6 +33,31 @@ def crear_cliente():
     # Datos esperados: nombre_contacto, empresa, email, telefono
     response = supabase.table("clientes").insert(datos).execute()
     return jsonify(response.data), 201
+
+@app.route('/api/clientes', methods=['POST'])
+def agregar_cliente():
+    nuevo_cliente = request.json
+    # Aquí usarías supabase.table('clientes').insert(nuevo_cliente).execute()
+    return jsonify({"mensaje": "Cliente agregado exitosamente"}), 201
+
+@app.route('/api/clientes/<id>', methods=['DELETE'])
+def eliminar_cliente(id):
+    try:
+        # Borra el cliente que coincida con el ID
+        response = supabase.table('clientes').delete().eq('id', id).execute()
+        return jsonify({"status": "success", "message": "Cliente eliminado"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/clientes/<id>', methods=['PUT'])
+def actualizar_cliente(id):
+    try:
+        datos_actualizados = request.json
+        # Actualizamos en Supabase donde el ID coincida
+        response = supabase.table('clientes').update(datos_actualizados).eq('id', id).execute()
+        return jsonify({"status": "success", "data": response.data}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # --- SECCIÓN DE PROYECTOS ---
 

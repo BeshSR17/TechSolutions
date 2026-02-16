@@ -1,73 +1,47 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import './AdminDashboard.css'
+import ClientesView from './ClientesView' // Importamos la vista
 
-
-const AdminDashboard = ({ session, supabase }) => {
-  const [clientes, setClientes] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  // Función para traer datos desde tu Backend de Python (Flask)
-  const fetchClientes = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/clientes')
-      const data = await response.json()
-      setClientes(data)
-    } catch (error) {
-      console.error("Error cargando clientes:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchClientes()
-  }, [])
+const AdminDashboard = ({ session, handleLogout }) => {
+  const [seccionActual, setSeccionActual] = useState('clientes')
 
   return (
-    <div className="dashboard-content">
-      <header className="dashboard-header">
-        <h1>Panel de Gestión TechSolutions S.A</h1>
-        <p>Bienvenido, <strong>{session.user.user_metadata?.nombre || 'Usuario'}</strong></p>
-      </header>
-
-      <div className="stats-bar">
-        <div className="stat-card">
-          <h3>Clientes</h3>
-          <p>{clientes.length}</p>
+    <div className="main-layout">
+      {/* BARRA LATERAL */}
+      <aside className="side-nav">
+        <h2 className="nav-logo">TechSolutions</h2>
+        <div className="button-group">
+          <button 
+            className={seccionActual === 'clientes' ? 'active' : ''} 
+            onClick={() => setSeccionActual('clientes')}
+          >
+            👥 Gestión Clientes
+          </button>
+          <button 
+            className={seccionActual === 'proyectos' ? 'active' : ''} 
+            onClick={() => setSeccionActual('proyectos')}
+          >
+            📁 Proyectos
+          </button>
         </div>
-        <div className="stat-card">
-          <h3>Proyectos</h3>
-          <p>Próximamente</p>
-        </div>
-      </div>
+        <button onClick={handleLogout} className="logout-btn">Cerrar Sesión</button>
+      </aside>
 
-      <section className="data-section">
-        <h2>Listado de Clientes</h2>
-        {loading ? (
-          <p>Cargando datos empresariales...</p>
-        ) : (
-          <table className="empresa-table">
-            <thead>
-              <tr>
-                <th>Empresa</th>
-                <th>Contacto</th>
-                <th>Email</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientes.map((c) => (
-                <tr key={c.id}>
-                  <td>{c.empresa}</td>
-                  <td>{c.nombre_contacto}</td>
-                  <td>{c.email}</td>
-                  <td><span className={`badge ${c.estado}`}>{c.estado}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* ÁREA DE CONTENIDO */}
+      <main className="content-area">
+        <header className="dashboard-header">
+           <p>Bienvenido, <strong>{session.user.user_metadata?.nombre || 'Usuario'}</strong></p>
+        </header>
+
+        {/* Renderizado Condicional */}
+        {seccionActual === 'clientes' && <ClientesView />}
+        {seccionActual === 'proyectos' && (
+          <div className="dashboard-content">
+            <h1>Panel de Proyectos</h1>
+            <p>Mañana programaremos el CRUD de proyectos aquí.</p>
+          </div>
         )}
-      </section>
+      </main>
     </div>
   )
 }
