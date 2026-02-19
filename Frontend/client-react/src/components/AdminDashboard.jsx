@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import './AdminDashboard.css'
 import ClientesView from './ClientesView' // Importamos la vista
+import ProyectosView from './ProyectosView'
 
 const AdminDashboard = ({ session, handleLogout }) => {
   const [seccionActual, setSeccionActual] = useState('clientes')
@@ -9,7 +10,7 @@ const AdminDashboard = ({ session, handleLogout }) => {
     <div className="main-layout">
       {/* BARRA LATERAL */}
       <aside className="side-nav">
-        <h2 className="nav-logo">TechSolutions</h2>
+        <h2 className="nav-logo">Tech Solutions S.A.</h2>
         <div className="button-group">
           <button 
             className={seccionActual === 'clientes' ? 'active' : ''} 
@@ -30,17 +31,13 @@ const AdminDashboard = ({ session, handleLogout }) => {
       {/* ÁREA DE CONTENIDO */}
       <main className="content-area">
         <header className="dashboard-header">
-           <p>Bienvenido, <strong>{session.user.user_metadata?.nombre || 'Usuario'}</strong></p>
+          <p>Bienvenido, <strong>{session.user.user_metadata?.nombre || 'Usuario'}</strong></p>
         </header>
 
         {/* Renderizado Condicional */}
         {seccionActual === 'clientes' && <ClientesView />}
-        {seccionActual === 'proyectos' && (
-          <div className="dashboard-content">
-            <h1>Panel de Proyectos</h1>
-            <p>Mañana programaremos el CRUD de proyectos aquí.</p>
-          </div>
-        )}
+        {seccionActual === 'proyectos' && <ProyectosView/>
+        }
       </main>
     </div>
   )
