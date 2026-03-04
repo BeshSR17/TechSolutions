@@ -93,11 +93,60 @@ def eliminar_proyecto(id):
 
 # --- SECCIÓN DE TAREAS ----
 
+# 1. Obtener todas las tareas (o filtrar por proyecto como ya tienes)
 @app.route('/api/tareas/proyecto/<id>', methods=['GET'])
 def get_tareas_por_proyecto(id):
     try:
-        response = supabase.table("tareas").select("*").eq("proyecto_id", id).execute()
+        # Nota: Puedes hacer un join con perfiles para ver el nombre del empleado
+        response = supabase.table("tareas") \
+            .select("*, perfiles(nombre), proyectos(nombre_proyecto)") \
+            .eq("proyecto_id", id) \
+            .execute()
         return jsonify(response.data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# 2. Crear nueva tarea
+@app.route('/api/tareas', methods=['POST'])
+def crear_tarea():
+    try:
+        datos = request.json
+        # No necesitamos enviar 'codigo_serie' ni 'fecha_creacion', 
+        # el trigger de la base de datos lo hará automáticamente.
+        response = supabase.table("tareas").insert(datos).execute()
+        return jsonify(response.data), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# 3. Actualizar tarea (cambiar estado, avance, asignar, etc.)
+@app.route('/api/tareas', methods=['GET'])
+def get_todas_las_tareas():
+    try:
+        # Trae todas las tareas con sus relaciones
+        response = supabase.table("tareas") \
+            .select("*, perfiles(nombre), proyectos(nombre_proyecto)") \
+            .execute()
+        return jsonify(response.data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/tareas/<id>', methods=['PUT'])
+def actualizar_tarea(id):
+    try:
+        datos = request.json
+        # Si el estado cambia a 'Completada', asegúrate de que el front 
+        # envíe también la 'fecha_finalizacion' o el 'avance: 100'
+        response = supabase.table("tareas").update(datos).eq('id', id).execute()
+        return jsonify(response.data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# 4. Eliminar tarea
+@app.route('/api/tareas/<id>', methods=['DELETE'])
+def eliminar_tarea(id):
+    try:
+        response = supabase.table('tareas').delete().eq('id', id).execute()
+        return jsonify({"message": "Tarea eliminada"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

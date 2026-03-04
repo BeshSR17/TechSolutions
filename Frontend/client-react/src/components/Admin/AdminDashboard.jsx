@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import './AdminDashboard.css'
-import ClientesView from './ClientesView' // Importamos la vista
+import ClientesView from './ClientesView' 
 import ProyectosView from './ProyectosView'
+import TareasView from './TareasView'
 
 const AdminDashboard = ({ session, handleLogout }) => {
   const [seccionActual, setSeccionActual] = useState('clientes')
@@ -10,7 +11,7 @@ const AdminDashboard = ({ session, handleLogout }) => {
     <div className="main-layout">
       {/* BARRA LATERAL */}
       <aside className="side-nav">
-        <h2 className="nav-logo">Tech Solutions S.A.</h2>
+        <h2 className="nav-logo">TechSolutions</h2>
         <div className="button-group">
           <button 
             className={seccionActual === 'clientes' ? 'active' : ''} 
@@ -24,6 +25,14 @@ const AdminDashboard = ({ session, handleLogout }) => {
           >
             📁 Proyectos
           </button>
+
+          <button 
+            className={seccionActual === 'Tareas' ? 'active' : ''} 
+            onClick={() => setSeccionActual('Tareas')}
+          >
+            📁 Tareas
+          </button>
+
         </div>
         <button onClick={handleLogout} className="logout-btn">Cerrar Sesión</button>
       </aside>
@@ -36,8 +45,8 @@ const AdminDashboard = ({ session, handleLogout }) => {
 
         {/* Renderizado Condicional */}
         {seccionActual === 'clientes' && <ClientesView />}
-        {seccionActual === 'proyectos' && <ProyectosView/>
-        }
+        {seccionActual === 'proyectos' && <ProyectosView/>}
+        {seccionActual === 'Tareas' && <TareasView />}
       </main>
     </div>
   )

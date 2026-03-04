@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import AdminDashboard from './components/AdminDashboard'
+import AdminDashboard from './components/Admin/AdminDashboard'
+import UsersDashboard from './components/users/UsersDashboard'
 import './App.css'
 
 // Configuración de Supabase
@@ -11,6 +12,7 @@ const supabase = createClient(
 
 function App() {
   const [session, setSession] = useState(null)
+  const [rol, setRol] = useState(null)
   const [loading, setLoading] = useState(false)
   
   // Estados para el formulario
@@ -18,10 +20,26 @@ function App() {
   const [password, setPassword] = useState('')
   const [nombre, setNombre] = useState('')
 
+  const fetchRol = async (userID) =>{
+    const {data, error} = await supabase
+      .from('perfiles')
+      .select('rol')
+      .eq('id', userID)
+      .single()
+    if(data) setRol(data.rol)
+  }
   
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
-    supabase.auth.onAuthStateChange((_event, session) => setSession(session))
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      if (session) fetchRol(session.user.id) 
+    })
+    
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+      if (session) fetchRol(session.user.id)
+      else setRol(null) 
+    })
   }, [])
 
   const handleLogin = async (e) => {
@@ -84,7 +102,13 @@ function App() {
         </div>
       ) : (
         
-        <AdminDashboard session={session} handleLogout={handleLogout} />
+        rol === 'Administrador' ? (
+          <AdminDashboard session={session} handleLogout={handleLogout} />
+        ) : rol === 'Usuario' ? (
+          <UsersDashboard session={session} handleLogout={handleLogout} />
+        ) : (
+          <p>Cargando perfil...</p> // Estado de carga mientras llega el rol
+        )
       )}
     </div>
   );

@@ -1,0 +1,48 @@
+
+
+.dashboard-content {
+  padding: 40px;
+  animation: fadeIn 0.6s ease-out;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  margin-bottom: 40px;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 20px;
+}
+
+/* Ajuste específico para botones de navegación */
+.side-nav .button-group button {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 8px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: 0.2s;
+}
+
+.side-nav .button-group button.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.logout-btn {
+  margin-top: auto;
+  padding: 10px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
