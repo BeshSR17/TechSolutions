@@ -177,7 +177,7 @@ const ClientesView = () => {
         </div>
       </div>
 
-      {/* 3. FORMULARIO (Se mantiene igual) */}
+      {/* 3. FORMULARIO  */}
       {mostrarForm && (
         <section className="form-section animation-slide" style={{marginBottom: '25px'}}>
           <h3>{editandoId ? `✏️ Editando: ${nuevoCliente.empresa}` : '➕ Registrar Nuevo Cliente'}</h3>
@@ -198,7 +198,7 @@ const ClientesView = () => {
         </section>
       )}
 
-      {/* 4. TABLA (Se mantiene igual con clientesFiltrados) */}
+      {/* 4. TABLA */}
       <section className="data-section">
         {loading ? <p>Cargando información corporativa...</p> : (
           <table className="empresa-table">

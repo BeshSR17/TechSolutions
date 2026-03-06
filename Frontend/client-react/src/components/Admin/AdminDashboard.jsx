@@ -3,6 +3,7 @@ import './AdminDashboard.css'
 import ClientesView from './ClientesView' 
 import ProyectosView from './ProyectosView'
 import TareasView from './TareasView'
+import UsuariosView from './UsuariosView'
 
 const AdminDashboard = ({ session, handleLogout }) => {
   const [seccionActual, setSeccionActual] = useState('clientes')
@@ -32,6 +33,12 @@ const AdminDashboard = ({ session, handleLogout }) => {
           >
             📁 Tareas
           </button>
+          <button 
+            className={seccionActual === 'Usuarios' ? 'active' : ''} 
+            onClick={() => setSeccionActual('Usuarios')}
+          >
+            👥 Gestión Usuarios
+          </button>
 
         </div>
         <button onClick={handleLogout} className="logout-btn">Cerrar Sesión</button>
@@ -47,6 +54,7 @@ const AdminDashboard = ({ session, handleLogout }) => {
         {seccionActual === 'clientes' && <ClientesView />}
         {seccionActual === 'proyectos' && <ProyectosView/>}
         {seccionActual === 'Tareas' && <TareasView />}
+        {seccionActual === 'Usuarios' && <UsuariosView />}
       </main>
     </div>
   )
