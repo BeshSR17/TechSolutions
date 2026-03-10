@@ -37,7 +37,7 @@ html, body {
 
 /* 2. Contenedor de Autenticación (Login) */
 .auth-container {
-  margin: auto; 
+  margin: 0; 
   width: 90%;
   max-width: 400px;
   padding: 40px;
@@ -159,4 +159,57 @@ button:hover {
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 10px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--primary);
+  margin-top: 15px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.auth-logo {
+  width: 100%;
+  max-width: 220px; 
+  height: auto;
+  margin-bottom: 5px;
+  filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.2)); 
+}
+
+.auth-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 1px; /* Espacio entre el logo y el cuadro */
+}
+
+.auth-logo-outside {
+  width: 270px; 
+  height: auto;
+  filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.4));
+  transition: transform 0.3s ease;
+}
+
+.auth-logo-outside:hover {
+  transform: scale(1.05);
+}
+
+.animation-slide {
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

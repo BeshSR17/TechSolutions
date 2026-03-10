@@ -8,13 +8,14 @@ const UsuariosView = () => {
   const [editandoId, setEditandoId] = useState(null)
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null)
   const [busqueda, setBusqueda] = useState('')
-
+  const [filtroEstado, setFiltroEstado] = useState(null)
   const [nuevoUsuario, setNuevoUsuario] = useState({
     id_visual: '',
     nombre: '',
     email: '',
     rol: 'Usuario',
-    biografia: '' 
+    biografia: '',
+    avatar_url: '' // Asegúrate de tener este campo
   })
 
   const fetchData = async () => {
@@ -51,6 +52,12 @@ const UsuariosView = () => {
     fetchData()
   }
 
+  const stats = {
+    total: usuarios.length,
+    activos: usuarios.filter(u => u.estado === 'Activo').length,
+    inactivos: usuarios.filter(u => u.estado === 'Inactivo').length
+  };
+
   const prepararEdicion = (u) => {
     setNuevoUsuario({ ...u })
     setEditandoId(u.id)
@@ -68,12 +75,30 @@ const UsuariosView = () => {
     fetchTareasUsuario(u.id)
   }
 
-  const usuariosFiltrados = usuarios.filter(u => 
-    u.nombre?.toLowerCase().includes(busqueda.toLowerCase()) || 
-    u.email?.toLowerCase().includes(busqueda.toLowerCase()) ||
-    u.id_visual?.toLowerCase().includes(busqueda.toLowerCase())
-  )
+  const usuariosFiltrados = usuarios.filter(u => {
+    const coincideBusqueda = 
+      u.nombre?.toLowerCase().includes(busqueda.toLowerCase()) || 
+      u.email?.toLowerCase().includes(busqueda.toLowerCase()) ||
+      u.id_visual?.toLowerCase().includes(busqueda.toLowerCase());
+    
+    // Lógica de filtro por estado
+    const coincideEstado = filtroEstado ? u.estado === filtroEstado : true;
+    
+    return coincideBusqueda && coincideEstado;
+  });
 
+  const getCardStyle = (color, isActive) => ({
+    background: isActive ? '#2d3748' : '#1e293b',
+    padding: '15px',
+    borderRadius: '12px',
+    borderLeft: `4px solid ${color}`,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    transform: isActive ? 'scale(1.02)' : 'scale(1)',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center'
+  });
   // --- SUB-VISTA: DETALLE DEL USUARIO ---
   const DetalleUsuario = ({ user, alCerrar }) => (
     <div className="animation-slide" style={{ background: '#1e293b', padding: '30px', borderRadius: '15px', border: '1px solid #334155' }}>
@@ -82,8 +107,15 @@ const UsuariosView = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-            <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: 'white', fontWeight: 'bold' }}>
-              {user.nombre?.charAt(0)}
+            {/* AQUÍ EL CAMBIO EN DETALLE */}
+            <div style={{ width: '70px', height: '70px', borderRadius: '50%', overflow: 'hidden' }}>
+              {user.avatar_url ? (
+                <img src={user.avatar_url} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: 'white', fontWeight: 'bold' }}>
+                  {user.nombre?.charAt(0)}
+                </div>
+              )}
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -118,7 +150,7 @@ const UsuariosView = () => {
             <p style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{user.biografia || "Sin descripción de perfil."}</p>
           </div>
           <div style={{ height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', borderRadius: '8px', marginTop: '20px', border: '1px dashed #334155' }}>
-             <span style={{ color: '#475569', textAlign: 'center', padding: '10px', fontSize: '0.8rem' }}>[ Gráfico de Productividad ]</span>
+            <span style={{ color: '#475569', textAlign: 'center', padding: '10px', fontSize: '0.8rem' }}>[ Gráfico de Productividad ]</span>
           </div>
         </div>
       </div>
@@ -126,24 +158,52 @@ const UsuariosView = () => {
   )
 
   return (
-    <div className="dashboard-content">
-      {usuarioSeleccionado ? (
-        <DetalleUsuario user={usuarioSeleccionado} alCerrar={() => setUsuarioSeleccionado(null)} />
-      ) : (
-        <>
-          <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
-            <input 
-              type="text" 
-              placeholder="🔍 Buscar por nombre, email o ID visual..." 
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#1e293b', color: 'white', border: '1px solid #334155' }}
-            />
-            <button className="btn-save" onClick={() => setMostrarForm(!mostrarForm)}>
-              {mostrarForm ? 'Cerrar' : '+ Nuevo Usuario'}
-            </button>
+        <div className="dashboard-content">
+        {/* 1. DASHBOARD DE ESTADÍSTICAS Y FILTROS */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px', marginBottom: '25px' }}>
+          <div 
+            style={getCardStyle('#3b82f6', filtroEstado === null)}
+            onClick={() => setFiltroEstado(null)}
+          >
+            <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>TOTAL</span>
+            <h2 style={{ margin: '5px 0 0 0', color: 'white' }}>{stats.total}</h2>
           </div>
 
+          <div 
+            style={getCardStyle('#10b981', filtroEstado === 'Activo')}
+            onClick={() => setFiltroEstado(filtroEstado === 'Activo' ? null : 'Activo')}
+          >
+            <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>ACTIVOS</span>
+            <h2 style={{ margin: '5px 0 0 0', color: '#10b981' }}>{stats.activos}</h2>
+          </div>
+
+          <div 
+            style={getCardStyle('#ef4444', filtroEstado === 'Inactivo')}
+            onClick={() => setFiltroEstado(filtroEstado === 'Inactivo' ? null : 'Inactivo')}
+          >
+            <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>INACTIVOS</span>
+            <h2 style={{ margin: '5px 0 0 0', color: '#ef4444' }}>{stats.inactivos}</h2>
+          </div>
+        </div>
+
+        {/* 2. VISTA DE DETALLE O GESTIÓN PRINCIPAL */}
+        {usuarioSeleccionado ? (
+          <DetalleUsuario user={usuarioSeleccionado} alCerrar={() => setUsuarioSeleccionado(null)} />
+        ) : (
+          <>
+        {/* BARRA DE BÚSQUEDA Y BOTÓN NUEVO */}
+        <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
+          <input 
+            type="text" 
+            placeholder="🔍 Buscar por nombre, email o ID visual..." 
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#1e293b', color: 'white', border: '1px solid #334155' }}
+          />
+          <button className="btn-save" onClick={() => setMostrarForm(!mostrarForm)}>
+            {mostrarForm ? 'Cerrar' : '+ Nuevo Usuario'}
+          </button>
+        </div>
           {mostrarForm && (
             <section className="form-section animation-slide" style={{ marginBottom: '25px', background: '#1e293b', padding: '20px', borderRadius: '12px', border: '1px solid #334155' }}>
               <h3 style={{ color: 'white', marginBottom: '20px' }}>{editandoId ? '✏️ Editar Usuario' : '👤 Registrar Nuevo Colaborador'}</h3>
@@ -180,20 +240,37 @@ const UsuariosView = () => {
             </section>
           )}
 
+          {/* 4. LISTADO DE USUARIOS CORREGIDO */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
             {loading ? <p>Cargando...</p> : usuariosFiltrados.map(u => (
               <div key={u.id} className="proyecto-card" onClick={() => abrirDetalle(u)} style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #334155', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '15px', position: 'relative' }}>
+                
+                {/* Indicador de Estado */}
+                <div style={{ position: 'absolute', top: '10px', left: '15px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: u.estado === 'Activo' ? '#10b981' : '#64748b' }}></div>
+                  <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>{u.estado || 'Desconocido'}</span>
+                </div>
+
                 <span style={{ position: 'absolute', top: '10px', right: '15px', fontSize: '0.65rem', color: '#475569', fontWeight: 'bold', background: '#0f172a', padding: '2px 8px', borderRadius: '10px' }}>
                   #{u.id_visual || 'S/ID'}
                 </span>
-                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '1.2rem' }}>
-                  {u.nombre?.charAt(0)}
+
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', overflow: 'hidden', marginTop: '15px' }}>
+                  {u.avatar_url ? (
+                    <img src={u.avatar_url} alt={u.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '1.2rem' }}>
+                      {u.nombre?.charAt(0)}
+                    </div>
+                  )}
                 </div>
-                <div style={{ flex: 1 }}>
+
+                <div style={{ flex: 1, marginTop: '15px' }}>
                   <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '1rem' }}>{u.nombre}</h3>
                   <p style={{ color: '#64748b', fontSize: '0.75rem', margin: 0 }}>{u.email}</p>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px', marginTop: '15px' }}>
                   <span className={`badge ${u.rol === 'Admin' ? 'urgente' : 'baja'}`} style={{ fontSize: '0.6rem' }}>{u.rol}</span>
                   <button onClick={(e) => { e.stopPropagation(); prepararEdicion(u); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>✏️</button>
                 </div>

@@ -4,7 +4,7 @@ const ProyectosView = () => {
   // --- ESTADOS ---
   const [proyectos, setProyectos] = useState([])
   const [clientes, setClientes] = useState([])
-  const [tareasProyecto, setTareasProyecto] = useState([]) 
+  const [todasLasTareas, setTodasLasTareas] = useState([]) // Fuente única de verdad
   const [loading, setLoading] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
@@ -25,29 +25,16 @@ const ProyectosView = () => {
   // --- CARGA DE DATOS ---
   const fetchData = async () => {
     try {
-      setLoading(true)
-      const [resProy, resCli] = await Promise.all([
+      setLoading(true);
+      const [resProy, resCli, resTareas] = await Promise.all([
         fetch('http://localhost:5000/api/proyectos'),
-        fetch('http://localhost:5000/api/clientes')
-      ])
-      setProyectos(await resProy.json())
-      setClientes(await resCli.json())
-    } catch (error) {
-      console.error("Error:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Cargar tareas cuando se selecciona un proyecto
-  const fetchTareasProyecto = async (id) => {
-    try {
-      const res = await fetch(`http://localhost:5000/api/tareas/proyecto/${id}`)
-      const data = await res.json()
-      setTareasProyecto(data)
-    } catch (error) {
-      console.error("Error cargando tareas:", error)
-    }
+        fetch('http://localhost:5000/api/clientes'),
+        fetch('http://localhost:5000/api/tareas')
+      ]);
+      setProyectos(await resProy.json());
+      setClientes(await resCli.json());
+      setTodasLasTareas(await resTareas.json());
+    } finally { setLoading(false); }
   }
 
   useEffect(() => { fetchData() }, [])
@@ -113,52 +100,54 @@ const ProyectosView = () => {
     setNuevoProyecto({ cliente_id: '', nombre_proyecto: '', descripcion: '', fecha_inicio: '', fecha_fin: '', estado: 'Planificación' })
   }
 
-  const abrirDetalle = (p) => {
-    setProyectoSeleccionado(p)
-    fetchTareasProyecto(p.id)
-  }
-
   // --- COMPONENTE: DETALLE DEL PROYECTO ---
-  const DetalleProyecto = ({ proyecto, alCerrar }) => (
-    <div className="animation-slide" style={{ background: '#1e293b', padding: '30px', borderRadius: '15px', border: '1px solid #334155' }}>
-      <button onClick={alCerrar} className="btn-secondary" style={{ marginBottom: '20px' }}>← Volver</button>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px' }}>
-        <div>
-          <h2 style={{ color: 'white', marginBottom: '10px' }}>{proyecto.nombre_proyecto}</h2>
-          <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{proyecto.descripcion}</p>
-          
-          <h4 style={{ color: 'white', marginTop: '30px', marginBottom: '15px' }}>Tareas del Proyecto ({tareasProyecto.length})</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {tareasProyecto.length === 0 ? <p style={{color:'#475569'}}>No hay tareas asignadas.</p> : 
-              tareasProyecto.map(t => (
-                <div key={t.id} style={{ background: '#0f172a', padding: '12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#f8fafc' }}>{t.titulo}</span>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>👤 {t.perfiles?.nombre}</span>
-                    <span className={`badge ${t.estado?.replace(/\s+/g, '-').toLowerCase()}`} style={{ fontSize: '0.6rem' }}>{t.estado}</span>
-                  </div>
-                </div>
-              ))
-            }
-          </div>
-        </div>
+  const DetalleProyecto = ({ proyecto, alCerrar }) => {
+    // FILTRO LOCAL: Se calcula al instante sin hacer peticiones extra
+    const tareasDelProyecto = todasLasTareas.filter(t => t.proyecto_id === proyecto.id);
 
-        <div style={{ background: '#0f172a', borderRadius: '12px', padding: '20px', height: 'fit-content' }}>
-          <h4 style={{ color: '#64748b', marginBottom: '15px' }}>Ficha Técnica</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', color: '#cbd5e1', fontSize: '0.9rem' }}>
-            <p><strong>Cliente:</strong> {proyecto.clientes?.empresa}</p>
-            <p><strong>Contacto:</strong> {proyecto.clientes?.nombre_contacto}</p>
-            <p><strong>Inicio:</strong> {proyecto.fecha_inicio}</p>
-            <p><strong>Fin:</strong> {proyecto.fecha_fin || 'Sin definir'}</p>
-            <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', borderRadius: '8px', border: '1px dashed #334155' }}>
-              <span style={{ color: '#475569' }}>[ Gráfico de Salud ]</span>
+    return (
+      <div className="animation-slide" style={{ background: '#1e293b', padding: '30px', borderRadius: '15px', border: '1px solid #334155' }}>
+        <button onClick={alCerrar} className="btn-secondary" style={{ marginBottom: '20px' }}>← Volver</button>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px' }}>
+          <div>
+            <h2 style={{ color: 'white', marginBottom: '10px' }}>{proyecto.nombre_proyecto}</h2>
+            <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{proyecto.descripcion}</p>
+            
+            <h4 style={{ color: 'white', marginTop: '30px', marginBottom: '15px' }}>Tareas del Proyecto ({tareasDelProyecto.length})</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {tareasDelProyecto.length === 0 ? (
+                <p style={{ color: '#475569' }}>No hay tareas asignadas.</p>
+              ) : (
+                tareasDelProyecto.map(t => (
+                  <div key={t.id} style={{ background: '#0f172a', padding: '12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#f8fafc' }}>{t.titulo}</span>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>👤 {t.perfiles?.nombre}</span>
+                      <span className={`badge ${t.estado?.replace(/\s+/g, '-').toLowerCase()}`} style={{ fontSize: '0.6rem' }}>{t.estado}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div style={{ background: '#0f172a', borderRadius: '12px', padding: '20px', height: 'fit-content' }}>
+            <h4 style={{ color: '#64748b', marginBottom: '15px' }}>Ficha Técnica</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', color: '#cbd5e1', fontSize: '0.9rem' }}>
+              <p><strong>Cliente:</strong> {proyecto.clientes?.empresa}</p>
+              <p><strong>Contacto:</strong> {proyecto.clientes?.nombre_contacto}</p>
+              <p><strong>Inicio:</strong> {proyecto.fecha_inicio}</p>
+              <p><strong>Fin:</strong> {proyecto.fecha_fin || 'Sin definir'}</p>
+              <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', borderRadius: '8px', border: '1px dashed #334155' }}>
+                <span style={{ color: '#475569' }}>[ Gráfico de Salud ]</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   const getStatStyle = (color, isActive) => ({
     background: isActive ? '#2d3748' : '#1e293b',
@@ -176,7 +165,6 @@ const ProyectosView = () => {
         <DetalleProyecto proyecto={proyectoSeleccionado} alCerrar={() => setProyectoSeleccionado(null)} />
       ) : (
         <>
-          {/* 1. STATS */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
             <div style={getStatStyle('#3b82f6', filtroEstado === null)} onClick={() => setFiltroEstado(null)}>
               <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>TOTALES</span>
@@ -196,7 +184,6 @@ const ProyectosView = () => {
             </div>
           </div>
 
-          {/* 2. BUSCADOR */}
           <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
             <input 
               type="text" 
@@ -210,12 +197,10 @@ const ProyectosView = () => {
             </button>
           </div>
 
-          {/* 3. FORMULARIO */}
           {mostrarForm && (
             <section className="form-section animation-slide" style={{ marginBottom: '25px', background: '#1e293b', padding: '20px', borderRadius: '12px', border: '1px solid #334155' }}>
               <h3 style={{ color: 'white', marginBottom: '20px' }}>{editandoId ? '✏️ Editar Proyecto' : '➕ Nuevo Proyecto'}</h3>
               <form onSubmit={handleGuardar} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
                   <select value={nuevoProyecto.cliente_id} onChange={e => setNuevoProyecto({...nuevoProyecto, cliente_id: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
                     <option value="">-- Cliente --</option>
@@ -223,15 +208,8 @@ const ProyectosView = () => {
                   </select>
                   <input type="text" placeholder="Nombre del Proyecto" value={nuevoProyecto.nombre_proyecto} onChange={e => setNuevoProyecto({...nuevoProyecto, nombre_proyecto: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }} />
                 </div>
-
                 <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: '15px' }}>
-                  <textarea 
-                    placeholder="Descripción detallada del proyecto..." 
-                    value={nuevoProyecto.descripcion} 
-                    onChange={e => setNuevoProyecto({...nuevoProyecto, descripcion: e.target.value})} 
-                    rows="6"
-                    style={{ padding: '12px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', resize: 'none' }} 
-                  />
+                  <textarea placeholder="Descripción detallada del proyecto..." value={nuevoProyecto.descripcion} onChange={e => setNuevoProyecto({...nuevoProyecto, descripcion: e.target.value})} rows="6" style={{ padding: '12px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', resize: 'none' }} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div>
                       <label style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Fecha Inicio</label>
@@ -251,7 +229,6 @@ const ProyectosView = () => {
                     </div>
                   </div>
                 </div>
-
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button type="submit" className="btn-save" style={{ padding: '10px 25px' }}>{editandoId ? 'Actualizar' : 'Registrar'}</button>
                   <button type="button" className="btn-secondary" onClick={cerrarFormulario}>Cancelar</button>
@@ -260,10 +237,9 @@ const ProyectosView = () => {
             </section>
           )}
 
-          {/* 4. LISTADO */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
             {loading ? <p>Cargando...</p> : proyectosFiltrados.map(p => (
-              <div key={p.id} className="proyecto-card" onClick={() => abrirDetalle(p)} style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #334155', cursor: 'pointer' }}>
+              <div key={p.id} className="proyecto-card" onClick={() => setProyectoSeleccionado(p)} style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #334155', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                     <span style={{ fontSize: '0.75rem', color: '#3b82f6', fontWeight: 'bold' }}>🏢 {p.clientes?.empresa}</span>
                     <div style={{ display: 'flex', gap: '8px' }}>

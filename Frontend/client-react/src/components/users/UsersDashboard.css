@@ -13,6 +13,27 @@
   padding-bottom: 20px;
 }
 
+/* Seccion del logo */
+
+.nav-logo-container {
+  padding: 10px 0 30px 0;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+}
+
+.nav-logo-img {
+  width: 100%;
+  max-width: 150px; /* Un poco más compacto para el dashboard de usuario */
+  height: auto;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.3));
+  transition: transform 0.3s ease;
+}
+
+.nav-logo-img:hover {
+  transform: scale(1.03);
+}
+
 /* Ajuste específico para botones de navegación */
 .side-nav .button-group button {
   width: 100%;
@@ -30,6 +51,17 @@
 .side-nav .button-group button.active {
   background: #3b82f6;
   color: white;
+}
+
+.side-nav {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-nav .button-group button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
 }
 
 .logout-btn {

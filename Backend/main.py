@@ -9,7 +9,6 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Configuración de Supabase
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
@@ -185,6 +184,16 @@ def eliminar_perfil(id):
     try:
         response = supabase.table("perfiles").delete().eq('id', id).execute()
         return jsonify({"message": "Perfil eliminado"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/perfiles/avatar/<id>', methods=['PATCH'])
+def actualizar_avatar(id):
+    try:
+        url_avatar = request.json.get('avatar_url')
+        response = supabase.table("perfiles").update({"avatar_url": url_avatar}).eq('id', id).execute()
+        return jsonify(response.data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -25,6 +25,27 @@
   margin-top: 8px;
 }
 
+/* Seccion del logo */
+.nav-logo-container {
+  padding: 10px 0 30px 0; /* Espaciado superior e inferior */
+  text-align: center;
+  display: flex;
+  justify-content: center;
+}
+
+.nav-logo-img {
+  width: 100%;
+  max-width: 160px; /* tamaño */
+  height: auto;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.3));
+  transition: transform 0.3s ease;
+}
+
+.nav-logo-img:hover {
+  transform: scale(1.03);
+}
+
+
 /* Sección de Formulario (Registro de Clientes) */
 .form-section {
   background: #1e293b; /* bg-card */
@@ -59,6 +80,19 @@
 .cliente-form input:focus {
   border-color: #3b82f6;
   outline: none;
+}
+
+.side-nav .button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.side-nav button.active {
+  background-color: var(--primary);
+  color: white;
+  border-left: 4px solid #f8fafc; /* Un detalle visual de "selección" */
 }
 
 .btn-save {
@@ -137,6 +171,7 @@
 }
 
 
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -172,4 +207,30 @@
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-20px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* Estilos para el nuevo encabezado con foto */
+.user-info-header {
+  display: flex;
+  align-items: center;
+  gap: 15px; /* Espacio entre foto y nombre */
+  justify-content: flex-end; /* Alinea todo a la derecha */
+}
+
+.header-avatar {
+  width: 40px;      /* Tamaño fijo pequeño */
+  height: 40px;     /* Tamaño fijo pequeño */
+  border-radius: 50%; /* La hace circular */
+  object-fit: cover;  /* Recorta la imagen para que no se deforme */
+  border: 2px solid #3b82f6; /* Borde azul para que destaque */
+}
+
+/* Ajuste del contenedor padre para asegurar que el header se vea bien */
+.dashboard-header {
+  display: flex;
+  justify-content: flex-end; /* Alinea los elementos internos a la derecha */
+  padding: 10px 40px;
+  margin-bottom: 40px;
+  border-bottom: 1px solid #334155;
 }
