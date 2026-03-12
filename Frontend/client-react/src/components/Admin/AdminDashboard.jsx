@@ -11,12 +11,13 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
   const [seccionActual, setSeccionActual] = useState('clientes')
   const [avatarUrl, setAvatarUrl] = useState(null)
 
-const handleAvatarUpdate = (newUrl) => {
-  setAvatarUrl(newUrl)
-}
+  const handleAvatarUpdate = (newUrl) => {
+    setAvatarUrl(newUrl)
+  }
 
-useEffect(() => {
+  useEffect(() => {
     const fetchAvatar = async () => {
+      
       const { data } = await supabase
         .from('perfiles')
         .select('avatar_url')
@@ -28,11 +29,10 @@ useEffect(() => {
     fetchAvatar()
   }, [session.user.id])
 
-return (
+  return (
     <div className="main-layout">
       {/* BARRA LATERAL */}
       <aside className="side-nav">
-        {/* REEMPLAZAMOS EL H2 POR EL LOGO */}
         <div className="nav-logo-container">
           <img src={logo} alt="TechSolutions Logo" className="nav-logo-img" />
         </div>
@@ -44,7 +44,7 @@ return (
           >
             👥 Gestión Clientes
           </button>
-          {/* ... resto de tus botones se mantienen igual */}
+          
           <button 
             className={seccionActual === 'proyectos' ? 'active' : ''} 
             onClick={() => setSeccionActual('proyectos')}
@@ -56,45 +56,50 @@ return (
             className={seccionActual === 'Tareas' ? 'active' : ''} 
             onClick={() => setSeccionActual('Tareas')}
           >
-            📁 Tareas
+            📋 Tareas 
           </button>
+
           <button 
             className={seccionActual === 'Usuarios' ? 'active' : ''} 
             onClick={() => setSeccionActual('Usuarios')}
           >
-            👥 Gestión Usuarios
+            👤 Gestión Usuarios
           </button>
+
           <button 
             className={seccionActual === 'perfil' ? 'active' : ''} 
             onClick={() => setSeccionActual('perfil')}
           >
-            ⚙️ Configuración
+            ⚙️ Mi Perfil
           </button>
-
         </div>
+        
         <button onClick={handleLogout} className="logout-btn">Cerrar Sesión</button>
       </aside>
 
       {/* ÁREA DE CONTENIDO */}
       <main className="content-area">
         <header className="dashboard-header">
-          {/* AÑADIMOS EL CONTENEDOR DE LA MINI-FOTO */}
           <div className="user-info-header">
             <img 
               src={avatarUrl || 'https://via.placeholder.com/40'} 
               alt="Perfil" 
               className="header-avatar" 
             />
-            <p>Bienvenido, <strong>{session.user.user_metadata?.nombre || 'Usuario'}</strong></p>
+            <p>Panel de Administración | <strong>{session.user.user_metadata?.nombre || 'Admin'}</strong></p>
           </div>
         </header>
 
         {/* Renderizado Condicional */}
-        {seccionActual === 'clientes' && <ClientesView />}
-        {seccionActual === 'proyectos' && <ProyectosView/>}
-        {seccionActual === 'Tareas' && <TareasView />}
-        {seccionActual === 'Usuarios' && <UsuariosView />}
-        {seccionActual === 'perfil' && (<Perfil session={session} onAvatarUpdate={handleAvatarUpdate} />)}
+        <section className="view-container">
+          {seccionActual === 'clientes' && <ClientesView />}
+          {seccionActual === 'proyectos' && <ProyectosView />}
+          {seccionActual === 'Tareas' && <TareasView isAdmin={true} />}
+          {seccionActual === 'Usuarios' && <UsuariosView />}
+          {seccionActual === 'perfil' && (
+            <Perfil session={session} onAvatarUpdate={handleAvatarUpdate} />
+          )}
+        </section>
       </main>
     </div>
   )

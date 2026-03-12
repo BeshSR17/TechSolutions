@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
+import { apiClient } from '../../apiClient'; // Importación vital para la seguridad
 
 const ProyectosView = () => {
   // --- ESTADOS ---
   const [proyectos, setProyectos] = useState([])
   const [clientes, setClientes] = useState([])
-  const [todasLasTareas, setTodasLasTareas] = useState([]) // Fuente única de verdad
+  const [todasLasTareas, setTodasLasTareas] = useState([]) 
   const [loading, setLoading] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
@@ -22,19 +23,29 @@ const ProyectosView = () => {
     estado: 'Planificación'
   })
 
-  // --- CARGA DE DATOS ---
+  // --- CARGA DE DATOS CON JWT ---
   const fetchData = async () => {
     try {
       setLoading(true);
+      // Usamos apiClient para todas las llamadas paralelas
       const [resProy, resCli, resTareas] = await Promise.all([
-        fetch('http://localhost:5000/api/proyectos'),
-        fetch('http://localhost:5000/api/clientes'),
-        fetch('http://localhost:5000/api/tareas')
+        apiClient('/proyectos'),
+        apiClient('/clientes'),
+        apiClient('/tareas')
       ]);
+
+      if (!resProy.ok || !resCli.ok || !resTareas.ok) {
+        throw new Error("Error al obtener datos del servidor seguro");
+      }
+
       setProyectos(await resProy.json());
       setClientes(await resCli.json());
       setTodasLasTareas(await resTareas.json());
-    } finally { setLoading(false); }
+    } catch (error) {
+      console.error("Fallo en la carga de datos:", error);
+    } finally { 
+      setLoading(false); 
+    }
   }
 
   useEffect(() => { fetchData() }, [])
@@ -59,32 +70,45 @@ const ProyectosView = () => {
     finalizados: proyectos.filter(p => p.estado === 'Finalizado').length
   }
 
-  // --- CRUD ---
+  // --- CRUD SEGURO ---
   const handleGuardar = async (e) => {
     e.preventDefault()
     if (!nuevoProyecto.cliente_id || !nuevoProyecto.nombre_proyecto) return alert("⚠️ Datos incompletos")
     if (enviando) return
     
-    const url = editandoId ? `http://localhost:5000/api/proyectos/${editandoId}` : 'http://localhost:5000/api/proyectos'
+    const endpoint = editandoId ? `/proyectos/${editandoId}` : '/proyectos'
     try {
       setEnviando(true)
-      const response = await fetch(url, {
+      const response = await apiClient(endpoint, {
         method: editandoId ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nuevoProyecto)
       })
+      
       if (response.ok) {
+        alert(editandoId ? "✅ Proyecto actualizado" : "✅ Proyecto creado");
         cerrarFormulario()
         fetchData()
+      } else {
+        alert("Error al procesar el proyecto");
       }
-    } catch (error) { console.error(error) } 
-    finally { setEnviando(false) }
+    } catch (error) { 
+      console.error("Error en el guardado:", error) 
+    } finally { 
+      setEnviando(false) 
+    }
   }
 
   const handleEliminar = async (id) => {
-    if (window.confirm("¿Eliminar proyecto?")) {
-      await fetch(`http://localhost:5000/api/proyectos/${id}`, { method: 'DELETE' })
-      fetchData()
+    if (window.confirm("¿Estás seguro de eliminar este proyecto y sus datos relacionados?")) {
+      try {
+        const response = await apiClient(`/proyectos/${id}`, { method: 'DELETE' });
+        if (response.ok) {
+          alert("🗑️ Proyecto eliminado");
+          fetchData();
+        }
+      } catch (error) {
+        console.error("Error al eliminar:", error);
+      }
     }
   }
 
@@ -102,7 +126,6 @@ const ProyectosView = () => {
 
   // --- COMPONENTE: DETALLE DEL PROYECTO ---
   const DetalleProyecto = ({ proyecto, alCerrar }) => {
-    // FILTRO LOCAL: Se calcula al instante sin hacer peticiones extra
     const tareasDelProyecto = todasLasTareas.filter(t => t.proyecto_id === proyecto.id);
 
     return (
@@ -117,7 +140,7 @@ const ProyectosView = () => {
             <h4 style={{ color: 'white', marginTop: '30px', marginBottom: '15px' }}>Tareas del Proyecto ({tareasDelProyecto.length})</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {tareasDelProyecto.length === 0 ? (
-                <p style={{ color: '#475569' }}>No hay tareas asignadas.</p>
+                <p style={{ color: '#475569' }}>No hay tareas vinculadas.</p>
               ) : (
                 tareasDelProyecto.map(t => (
                   <div key={t.id} style={{ background: '#0f172a', padding: '12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -140,7 +163,7 @@ const ProyectosView = () => {
               <p><strong>Inicio:</strong> {proyecto.fecha_inicio}</p>
               <p><strong>Fin:</strong> {proyecto.fecha_fin || 'Sin definir'}</p>
               <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', borderRadius: '8px', border: '1px dashed #334155' }}>
-                <span style={{ color: '#475569' }}>[ Gráfico de Salud ]</span>
+                <span style={{ color: '#475569' }}>[ Salud del Proyecto ]</span>
               </div>
             </div>
           </div>
@@ -203,13 +226,13 @@ const ProyectosView = () => {
               <form onSubmit={handleGuardar} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
                   <select value={nuevoProyecto.cliente_id} onChange={e => setNuevoProyecto({...nuevoProyecto, cliente_id: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
-                    <option value="">-- Cliente --</option>
-                    {clientes.map(c => <option key={c.id} value={c.id}>{c.empresa} -- ({c.nombre_contacto}) </option>)}
+                    <option value="">-- Seleccionar Cliente --</option>
+                    {clientes.map(c => <option key={c.id} value={c.id}>{c.empresa} ({c.nombre_contacto}) </option>)}
                   </select>
                   <input type="text" placeholder="Nombre del Proyecto" value={nuevoProyecto.nombre_proyecto} onChange={e => setNuevoProyecto({...nuevoProyecto, nombre_proyecto: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: '15px' }}>
-                  <textarea placeholder="Descripción detallada del proyecto..." value={nuevoProyecto.descripcion} onChange={e => setNuevoProyecto({...nuevoProyecto, descripcion: e.target.value})} rows="6" style={{ padding: '12px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', resize: 'none' }} />
+                  <textarea placeholder="Descripción detallada..." value={nuevoProyecto.descripcion} onChange={e => setNuevoProyecto({...nuevoProyecto, descripcion: e.target.value})} rows="6" style={{ padding: '12px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', resize: 'none' }} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div>
                       <label style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Fecha Inicio</label>
@@ -230,7 +253,7 @@ const ProyectosView = () => {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button type="submit" className="btn-save" style={{ padding: '10px 25px' }}>{editandoId ? 'Actualizar' : 'Registrar'}</button>
+                  <button type="submit" className="btn-save" disabled={enviando}>{enviando ? 'Guardando...' : editandoId ? 'Actualizar' : 'Registrar'}</button>
                   <button type="button" className="btn-secondary" onClick={cerrarFormulario}>Cancelar</button>
                 </div>
               </form>
@@ -238,7 +261,7 @@ const ProyectosView = () => {
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-            {loading ? <p>Cargando...</p> : proyectosFiltrados.map(p => (
+            {loading ? <p>Cargando proyectos corporativos...</p> : proyectosFiltrados.map(p => (
               <div key={p.id} className="proyecto-card" onClick={() => setProyectoSeleccionado(p)} style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #334155', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                     <span style={{ fontSize: '0.75rem', color: '#3b82f6', fontWeight: 'bold' }}>🏢 {p.clientes?.empresa}</span>

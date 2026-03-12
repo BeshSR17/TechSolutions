@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { apiClient } from '../../apiClient'; // Importamos el cliente seguro
 
 const ClientesView = () => {
   // --- ESTADOS ---
@@ -8,22 +9,30 @@ const ClientesView = () => {
   const [loading, setLoading] = useState(true)
   const [editandoId, setEditandoId] = useState(null)
   const [busqueda, setBusqueda] = useState('')
-  
-  // Cambiamos el valor inicial a null para que "TOTAL" sea el estado por defecto
   const [filtroEstado, setFiltroEstado] = useState(null);
 
   const [nuevoCliente, setNuevoCliente] = useState({
     empresa: '', nombre_contacto: '', email: '', telefono: '', estado: 'Activo'
   })
 
-  // --- LÓGICA DE DATOS ---
+  // --- LÓGICA DE DATOS CON JWT ---
   const fetchClientes = async () => {
     try {
       setLoading(true)
-      const response = await fetch('http://localhost:5000/api/clientes')
+      // Usamos apiClient: ya no necesita URL completa ni configuración manual de headers
+      const response = await apiClient('/clientes')
+      
+      if (!response.ok) {
+        throw new Error('Error de autenticación o servidor');
+      }
+
       const data = await response.json()
       setClientes(data)
-    } catch (error) { console.error("Error:", error) } finally { setLoading(false) }
+    } catch (error) { 
+      console.error("Error al obtener clientes:", error) 
+    } finally { 
+      setLoading(false) 
+    }
   }
 
   useEffect(() => { fetchClientes() }, [])
@@ -36,9 +45,9 @@ const ClientesView = () => {
     
     let coincideEstado = true;
     if (filtroEstado === 'Activo' || filtroEstado === 'Inactivo') {
-      coincideEstado = c.estado === filtroEstado;
+      coidinceEstado = c.estado === filtroEstado;
     } else if (filtroEstado === 'Sin Proyectos') {
-      coincideEstado = !c.proyectos || c.proyectos.length === 0;
+      coidinceEstado = !c.proyectos || c.proyectos.length === 0;
     }
 
     return coincideBusqueda && coincideEstado;
@@ -73,32 +82,42 @@ const ClientesView = () => {
 
   const handleGuardarCliente = async (e) => {
     e.preventDefault();
-    const url = editandoId ? `http://localhost:5000/api/clientes/${editandoId}` : 'http://localhost:5000/api/clientes';
+    const endpoint = editandoId ? `/clientes/${editandoId}` : '/clientes';
     const metodo = editandoId ? 'PUT' : 'POST';
     
     try {
-      const response = await fetch(url, {
+      const response = await apiClient(endpoint, {
         method: metodo,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nuevoCliente)
       });
+
       if (response.ok) {
         alert(editandoId ? "✅ Cliente actualizado" : "✅ Cliente guardado");
         cerrarFormulario();
         fetchClientes(); 
+      } else {
+        const errorData = await response.json();
+        alert("Error: " + (errorData.error || "No se pudo guardar"));
       }
-    } catch (error) { console.error(error); }
+    } catch (error) { 
+      console.error("Error en la operación:", error); 
+    }
   };
 
   const handleEliminar = async (id, nombre) => {
     if (window.confirm(`¿Estás seguro de que deseas eliminar a ${nombre}?`)) {
       try {
-        const response = await fetch(`http://localhost:5000/api/clientes/${id}`, { method: 'DELETE' });
+        const response = await apiClient(`/clientes/${id}`, { method: 'DELETE' });
+        
         if (response.ok) {
           setClientes(clientes.filter(c => c.id !== id));
           alert("🗑️ Cliente eliminado");
+        } else {
+          alert("No tienes permisos para eliminar o hubo un error.");
         }
-      } catch (error) { console.error(error); }
+      } catch (error) { 
+        console.error("Error al eliminar:", error); 
+      }
     }
   };
 
@@ -123,36 +142,24 @@ const ClientesView = () => {
   return (
     <div className="dashboard-content">
       
-      {/* 1. DASHBOARD FUNCIONAL (Compacto) */}
+      {/* 1. DASHBOARD DE ESTADÍSTICAS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        <div 
-          style={getCardStyle('#3b82f6', filtroEstado === null)}
-          onClick={() => setFiltroEstado(null)}
-        >
+        <div style={getCardStyle('#3b82f6', filtroEstado === null)} onClick={() => setFiltroEstado(null)}>
           <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>TOTAL</span>
           <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: 'white' }}>{stats.total}</h2>
         </div>
 
-        <div 
-          style={getCardStyle('#10b981', filtroEstado === 'Activo')}
-          onClick={() => setFiltroEstado(filtroEstado === 'Activo' ? null : 'Activo')}
-        >
+        <div style={getCardStyle('#10b981', filtroEstado === 'Activo')} onClick={() => setFiltroEstado(filtroEstado === 'Activo' ? null : 'Activo')}>
           <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>ACTIVOS</span>
           <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: '#10b981' }}>{stats.activos}</h2>
         </div>
 
-        <div 
-          style={getCardStyle('#ef4444', filtroEstado === 'Inactivo')}
-          onClick={() => setFiltroEstado(filtroEstado === 'Inactivo' ? null : 'Inactivo')}
-        >
+        <div style={getCardStyle('#ef4444', filtroEstado === 'Inactivo')} onClick={() => setFiltroEstado(filtroEstado === 'Inactivo' ? null : 'Inactivo')}>
           <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>INACTIVOS</span>
           <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: '#ef4444' }}>{stats.inactivos}</h2>
         </div>
 
-        <div 
-          style={getCardStyle('#f59e0b', filtroEstado === 'Sin Proyectos')}
-          onClick={() => setFiltroEstado(filtroEstado === 'Sin Proyectos' ? null : 'Sin Proyectos')}
-        >
+        <div style={getCardStyle('#f59e0b', filtroEstado === 'Sin Proyectos')} onClick={() => setFiltroEstado(filtroEstado === 'Sin Proyectos' ? null : 'Sin Proyectos')}>
           <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>SIN PROYECTOS</span>
           <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: '#f59e0b' }}>{stats.sinProyectos}</h2>
         </div>
@@ -177,7 +184,7 @@ const ClientesView = () => {
         </div>
       </div>
 
-      {/* 3. FORMULARIO  */}
+      {/* 3. FORMULARIO SEGURO */}
       {mostrarForm && (
         <section className="form-section animation-slide" style={{marginBottom: '25px'}}>
           <h3>{editandoId ? `✏️ Editando: ${nuevoCliente.empresa}` : '➕ Registrar Nuevo Cliente'}</h3>
@@ -198,9 +205,9 @@ const ClientesView = () => {
         </section>
       )}
 
-      {/* 4. TABLA */}
+      {/* 4. TABLA DE DATOS */}
       <section className="data-section">
-        {loading ? <p>Cargando información corporativa...</p> : (
+        {loading ? <p>Cargando información corporativa segura...</p> : (
           <table className="empresa-table">
             <thead>
               <tr>

@@ -3,28 +3,60 @@ from flask_cors import CORS
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
+from functools import wraps
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+# Habilitamos CORS para que acepte el header de Authorization desde el frontend
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
 
+# --- MIDDLEWARE DE AUTENTICACIÓN JWT ---
+def requiere_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "No autorizado"}), 401
+        
+        try:
+            token = auth_header.split(" ")[1]
+            # Validamos con Supabase
+            user_response = supabase.auth.get_user(token)
+            
+            if not user_response or not user_response.user:
+                return jsonify({"error": "Sesión inválida"}), 401
+
+            # Guardamos el ID en el objeto request, NO en los parámetros
+            request.user_id = user_response.user.id
+            
+        except Exception as e:
+            return jsonify({"error": "Token inválido", "details": str(e)}), 401
+            
+        return f(*args, **kwargs)
+    return decorated
+
 @app.route('/')
 def home():
-    return {"status": "API TechSolutions operando"}
+    return {"status": "API TechSolutions operando con Seguridad JWT"}
 
 # --- SECCIÓN DE CLIENTES ---
 
 @app.route('/api/clientes', methods=['GET'])
+@requiere_auth
 def get_clientes():
-    response = supabase.table('clientes').select("*, proyectos(*)").execute()
-    return jsonify(response.data)
+    try:
+        response = supabase.table('clientes').select("*, proyectos(*)").execute()
+        return jsonify(response.data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clientes', methods=['POST'])
+@requiere_auth
 def crear_cliente():
     try:
         datos = request.json
@@ -34,14 +66,16 @@ def crear_cliente():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clientes/<id>', methods=['DELETE'])
+@requiere_auth
 def eliminar_cliente(id):
     try:
-        response = supabase.table('clientes').delete().eq('id', id).execute()
+        supabase.table('clientes').delete().eq('id', id).execute()
         return jsonify({"status": "success", "message": "Cliente eliminado"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clientes/<id>', methods=['PUT'])
+@requiere_auth
 def actualizar_cliente(id):
     try:
         datos_actualizados = request.json
@@ -53,6 +87,7 @@ def actualizar_cliente(id):
 # --- SECCIÓN DE PROYECTOS ---
 
 @app.route('/api/proyectos', methods=['GET'])
+@requiere_auth
 def get_proyectos():
     try:
         response = supabase.table("proyectos").select("*, clientes(nombre_contacto, empresa)").execute()
@@ -61,6 +96,7 @@ def get_proyectos():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/proyectos', methods=['POST'])
+@requiere_auth
 def crear_proyecto():
     try:
         datos = request.json
@@ -70,6 +106,7 @@ def crear_proyecto():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/proyectos/<id>', methods=['PUT'])
+@requiere_auth
 def actualizar_proyecto(id):
     try:
         datos = request.json
@@ -79,9 +116,10 @@ def actualizar_proyecto(id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/proyectos/<id>', methods=['DELETE'])
+@requiere_auth
 def eliminar_proyecto(id):
     try:
-        response = supabase.table("proyectos").delete().eq('id', id).execute()
+        supabase.table("proyectos").delete().eq('id', id).execute()
         return jsonify({"message": "Proyecto eliminado"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -89,9 +127,9 @@ def eliminar_proyecto(id):
 # --- SECCIÓN DE TAREAS ----
 
 @app.route('/api/tareas', methods=['GET'])
+@requiere_auth
 def get_todas_las_tareas():
     try:
-        # SELECT MAESTRO: Trae Tarea + Empleado + Proyecto + Empresa del Cliente
         response = supabase.table("tareas") \
             .select("*, perfiles(nombre), proyectos(nombre_proyecto, clientes(empresa, nombre_contacto))") \
             .execute()
@@ -100,6 +138,7 @@ def get_todas_las_tareas():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/tareas/proyecto/<id>', methods=['GET'])
+@requiere_auth
 def get_tareas_por_proyecto(id):
     try:
         response = supabase.table("tareas") \
@@ -111,6 +150,7 @@ def get_tareas_por_proyecto(id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/tareas', methods=['POST'])
+@requiere_auth
 def crear_tarea():
     try:
         datos = request.json
@@ -120,6 +160,7 @@ def crear_tarea():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/tareas/<id>', methods=['PUT'])
+@requiere_auth
 def actualizar_tarea(id):
     try:
         datos = request.json
@@ -129,16 +170,35 @@ def actualizar_tarea(id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/tareas/<id>', methods=['DELETE'])
+@requiere_auth
 def eliminar_tarea(id):
     try:
-        response = supabase.table('tareas').delete().eq('id', id).execute()
+        supabase.table('tareas').delete().eq('id', id).execute()
         return jsonify({"message": "Tarea eliminada"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
+@app.route('/api/tareas/mis-tareas', methods=['GET'])
+@requiere_auth
+def get_mis_tareas():
+    try:
+        # Extraemos el ID que el middleware validó y guardó
+        user_id = request.user_id 
+        
+        response = supabase.table("tareas") \
+            .select("*, perfiles(nombre), proyectos(nombre_proyecto)") \
+            .eq("empleado_id", user_id) \
+            .execute()
+            
+        return jsonify(response.data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # --- SECCIÓN DE USUARIOS ---
 
 @app.route('/api/usuarios', methods=['GET'])
+@requiere_auth
 def get_usuarios():
     try:
         response = supabase.table("perfiles")\
@@ -148,20 +208,20 @@ def get_usuarios():
         return jsonify(response.data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
 
 # --- SECCIÓN DE GESTIÓN DE USUARIOS (PERFILES) ---
 
 @app.route('/api/perfiles', methods=['GET'])
+@requiere_auth
 def get_todos_los_perfiles():
     try:
-        # Traemos el perfil y contamos cuántas tareas tiene (opcional)
         response = supabase.table("perfiles").select("*").execute()
         return jsonify(response.data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/perfiles', methods=['POST'])
+@requiere_auth
 def crear_perfil():
     try:
         datos = request.json
@@ -171,6 +231,7 @@ def crear_perfil():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/perfiles/<id>', methods=['PUT'])
+@requiere_auth
 def actualizar_perfil(id):
     try:
         datos = request.json
@@ -180,15 +241,16 @@ def actualizar_perfil(id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/perfiles/<id>', methods=['DELETE'])
+@requiere_auth
 def eliminar_perfil(id):
     try:
-        response = supabase.table("perfiles").delete().eq('id', id).execute()
+        supabase.table("perfiles").delete().eq('id', id).execute()
         return jsonify({"message": "Perfil eliminado"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/api/perfiles/avatar/<id>', methods=['PATCH'])
+@requiere_auth
 def actualizar_avatar(id):
     try:
         url_avatar = request.json.get('avatar_url')
@@ -196,6 +258,26 @@ def actualizar_avatar(id):
         return jsonify(response.data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+# --- OBTENER UN PERFIL ESPECÍFICO ---
+@app.route('/api/perfiles/<id>', methods=['GET'])
+@requiere_auth
+def get_perfil_usuario(id):
+    try:
+        # Ejecutamos la consulta
+        query = supabase.table("perfiles").select("*").eq("id", id).execute()
+        
+        # En la librería de Python, verificamos si hay datos en la lista
+        if not query.data or len(query.data) == 0:
+            return jsonify({"error": "Perfil no encontrado"}), 404
+            
+        # Devolvemos el primer (y único) resultado
+        return jsonify(query.data[0])
+        
+    except Exception as e:
+        print(f"Error interno en el servidor: {e}") # Esto aparecerá en tu terminal negra/consola de Python
+        return jsonify({"error": "Error interno del servidor", "details": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # threaded=True permite manejar múltiples peticiones simultáneas, útil para el dashboard
+    app.run(debug=True, port=5000, threaded=True)
