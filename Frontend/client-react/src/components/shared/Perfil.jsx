@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../supabaseClient' // Importación centralizada
-import { apiClient } from '../../apiClient'     // Tu cliente con JWT
+import { supabase }   from '../../supabaseClient'
+import { apiClient }  from '../../apiClient'
 import './Perfil.css'
 
 const Perfil = ({ session, onAvatarUpdate }) => {
-  const [loading, setLoading] = useState(false)
-  const [avatarUrl, setAvatarUrl] = useState(null)
-  const [nombre, setNombre] = useState(session?.user?.user_metadata?.nombre || '')
-  const [biografia, setBiografia] = useState('')
-  const [newPassword, setNewPassword] = useState('')
+  const [loading,      setLoading]      = useState(false)
+  const [avatarUrl,    setAvatarUrl]    = useState(null)
+  const [nombre,       setNombre]       = useState(session?.user?.user_metadata?.nombre || '')
+  const [biografia,    setBiografia]    = useState('')
+  const [newPassword,  setNewPassword]  = useState('')
+  const [confirmPass,  setConfirmPass]  = useState('')
+  const [guardado,     setGuardado]     = useState(false)
+  const [idVisual,     setIdVisual]     = useState(null)
 
   const userId = session?.user?.id
 
-  // --- 1. CARGA INICIAL: Backend (Python + JWT) ---
   useEffect(() => {
     const getPerfil = async () => {
       try {
@@ -21,47 +23,48 @@ const Perfil = ({ session, onAvatarUpdate }) => {
           const data = await res.json()
           setBiografia(data.biografia || '')
           setAvatarUrl(data.avatar_url || null)
+          setIdVisual(data.id_visual ? String(data.id_visual) : null)
         }
-      } catch (error) {
-        console.error("Error al cargar perfil:", error)
+      } catch (err) {
+        console.error('Error al cargar perfil:', err)
       }
     }
     if (userId) getPerfil()
   }, [userId])
 
-  // --- 2. ACTUALIZACIÓN: Nombre, Biografía y Password ---
   const actualizarPerfil = async (e) => {
     e.preventDefault()
+    if (newPassword && newPassword !== confirmPass) {
+      alert('Las contraseñas no coinciden.')
+      return
+    }
     setLoading(true)
-
     try {
-      // A. Actualizar metadata en Supabase Auth
-      await supabase.auth.updateUser({ data: { nombre: nombre } })
+      await supabase.auth.updateUser({ data: { nombre } })
 
-      // B. Sincronizar con Backend Python (vía apiClient)
       const res = await apiClient(`/perfiles/${userId}`, {
         method: 'PUT',
         body: JSON.stringify({ biografia, nombre })
       })
-      if (!res.ok) throw new Error("Error al guardar en el servidor")
+      if (!res.ok) throw new Error('Error al guardar en el servidor')
 
-      // C. Cambio de contraseña opcional
       if (newPassword) {
-        if (newPassword.length < 6) throw new Error("La contraseña es muy corta")
+        if (newPassword.length < 6) throw new Error('La contraseña es muy corta (mínimo 6 caracteres)')
         const { error: passError } = await supabase.auth.updateUser({ password: newPassword })
         if (passError) throw passError
-        setNewPassword('') 
+        setNewPassword('')
+        setConfirmPass('')
       }
 
-      alert("✨ ¡Perfil actualizado correctamente!")
-    } catch (error) {
-      alert("Error: " + error.message)
+      setGuardado(true)
+      setTimeout(() => setGuardado(false), 3000)
+    } catch (err) {
+      alert('Error: ' + err.message)
     } finally {
       setLoading(false)
     }
   }
 
-  // --- 3. GESTIÓN DE FOTO: Storage + Referencia en DB ---
   const subirFoto = async (e) => {
     try {
       setLoading(true)
@@ -71,90 +74,157 @@ const Perfil = ({ session, onAvatarUpdate }) => {
       const fileExt = file.name.split('.').pop()
       const fileName = `${userId}.${fileExt}`
 
-      // Subida al bucket
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(fileName, file, { upsert: true, contentType: file.type })
 
       if (uploadError) throw uploadError
 
-      // Obtener URL pública y añadir cache-buster para que se actualice la imagen
       const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
-      const urlConCacheBuster = `${data.publicUrl}?t=${new Date().getTime()}`
+      const urlConCache = `${data.publicUrl}?t=${Date.now()}`
 
-      // Guardar URL en Backend Python
       await apiClient(`/perfiles/${userId}`, {
         method: 'PUT',
-        body: JSON.stringify({ avatar_url: urlConCacheBuster })
+        body: JSON.stringify({ avatar_url: urlConCache })
       })
 
-      setAvatarUrl(urlConCacheBuster)
-      if (onAvatarUpdate) onAvatarUpdate(urlConCacheBuster)
-      
-      alert("Foto de perfil actualizada")
-    } catch (error) {
-      alert("Error al subir: " + error.message)
+      setAvatarUrl(urlConCache)
+      if (onAvatarUpdate) onAvatarUpdate(urlConCache)
+    } catch (err) {
+      alert('Error al subir: ' + err.message)
     } finally {
       setLoading(false)
     }
   }
 
-  // REPETIMOS LA ESTRUCTURA EXACTA DEL DISEÑO ANTERIOR
+  const inicial = nombre ? nombre.charAt(0).toUpperCase() : '?'
+
   return (
-    <div className="perfil-container animation-slide">
-      <h3>Configuración de Perfil</h3>
-      <form onSubmit={actualizarPerfil} className="form-section">
-        
-        {/* Sección de Imagen idéntica a la original */}
-        <div className="avatar-display" style={{ textAlign: 'center', marginBottom: '20px' }}>
+    <div className="prf-root">
+
+      {/* ── Columna izquierda: avatar + info básica ── */}
+      <div className="prf-left">
+
+        {/* Avatar */}
+        <div className="prf-avatar-wrap">
           {avatarUrl ? (
-            <img src={avatarUrl} alt="Avatar" className="avatar-img" />
+            <img src={avatarUrl} alt="Avatar" className="prf-avatar-img" />
           ) : (
-            <div className="avatar-placeholder">Sin Foto</div>
+            <div className="prf-avatar-placeholder">{inicial}</div>
           )}
+          {loading && <div className="prf-avatar-loading"><div className="prf-spinner" /></div>}
         </div>
 
-        {/* Controles de carga idénticos */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-          <label htmlFor="avatar-upload" className="btn-save" style={{ cursor: 'pointer' }}>
-            {loading ? 'Procesando...' : 'Cambiar Fotografía'}
-          </label>
-          <input 
-            id="avatar-upload" 
-            type="file" 
-            accept="image/*" 
-            onChange={subirFoto} 
-            style={{ display: 'none' }} 
-          />
+        {/* Subir foto */}
+        <label htmlFor="avatar-upload" className="prf-btn prf-btn--secondary prf-upload-btn">
+          {loading ? 'Procesando...' : '📷 Cambiar foto'}
+        </label>
+        <input
+          id="avatar-upload"
+          type="file"
+          accept="image/*"
+          onChange={subirFoto}
+          style={{ display: 'none' }}
+        />
+
+        {/* Info card */}
+        <div className="prf-info-card">
+          <div className="prf-info-row">
+            <span className="prf-info-label">Email</span>
+            <span className="prf-info-val">{session?.user?.email}</span>
+          </div>
+          <div className="prf-info-row">
+            <span className="prf-info-label">ID de colaborador</span>
+            <span className="prf-info-val prf-mono">{idVisual || '—'}</span>
+          </div>
+          <div className="prf-info-row">
+            <span className="prf-info-label">Último acceso</span>
+            <span className="prf-info-val prf-mono">
+              {session?.user?.last_sign_in_at
+                ? new Date(session.user.last_sign_in_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })
+                : '—'}
+            </span>
+          </div>
         </div>
+      </div>
 
-        {/* Campos de texto con clases originales */}
-        <label>Nombre Completo</label>
-        <input 
-          type="text" 
-          value={nombre} 
-          onChange={(e) => setNombre(e.target.value)} 
-        />
+      {/* ── Columna derecha: formulario ── */}
+      <div className="prf-right">
+        <form className="prf-form" onSubmit={actualizarPerfil}>
 
-        <label>Biografía</label>
-        <textarea 
-          value={biografia} 
-          onChange={(e) => setBiografia(e.target.value)} 
-          placeholder="Cuéntanos sobre ti..." 
-        />
+          {/* Sección: datos personales */}
+          <div className="prf-section">
+            <h3 className="prf-section-title">Datos personales</h3>
 
-        <label>Nueva Contraseña (Opcional)</label>
-        <input 
-          type="password" 
-          placeholder="******" 
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)} 
-        />
+            <div className="prf-field">
+              <label className="prf-label">Nombre completo</label>
+              <input
+                className="prf-input"
+                type="text"
+                placeholder="Tu nombre"
+                value={nombre}
+                onChange={e => setNombre(e.target.value)}
+              />
+            </div>
 
-        <button type="submit" className="btn-save" disabled={loading}>
-          {loading ? 'Guardando...' : 'Guardar Cambios'}
-        </button>
-      </form>
+            <div className="prf-field">
+              <label className="prf-label">Biografía</label>
+              <textarea
+                className="prf-textarea"
+                placeholder="Cuéntanos sobre ti, tus habilidades o rol en el equipo..."
+                value={biografia}
+                onChange={e => setBiografia(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+
+          {/* Sección: seguridad */}
+          <div className="prf-section">
+            <h3 className="prf-section-title">Seguridad</h3>
+
+            <div className="prf-field">
+              <label className="prf-label">Nueva contraseña <span className="prf-optional">(opcional)</span></label>
+              <input
+                className="prf-input"
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="prf-field">
+              <label className="prf-label">Confirmar contraseña</label>
+              <input
+                className={`prf-input ${newPassword && confirmPass && newPassword !== confirmPass ? 'prf-input--error' : ''}`}
+                type="password"
+                placeholder="Repite la nueva contraseña"
+                value={confirmPass}
+                onChange={e => setConfirmPass(e.target.value)}
+              />
+              {newPassword && confirmPass && newPassword !== confirmPass && (
+                <span className="prf-error-msg">Las contraseñas no coinciden</span>
+              )}
+            </div>
+          </div>
+
+          {/* Botón guardar */}
+          <div className="prf-form-footer">
+            {guardado && (
+              <span className="prf-success-msg">✅ Cambios guardados correctamente</span>
+            )}
+            <button
+              type="submit"
+              className="prf-btn prf-btn--primary"
+              disabled={loading}
+            >
+              {loading ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
+
+        </form>
+      </div>
     </div>
   )
 }

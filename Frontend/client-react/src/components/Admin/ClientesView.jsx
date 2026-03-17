@@ -1,263 +1,375 @@
 import React, { useState, useEffect } from 'react'
-import { apiClient } from '../../apiClient'; // Importamos el cliente seguro
+import { apiClient } from '../../apiClient'
+import '../admin-design-system.css'
 
+// ── Configs ──────────────────────────────────────────────────────────────────
+const ESTADO_CFG = {
+  'Activo':   { color: '#10b981', bg: 'rgba(16,185,129,0.12)',  dot: '#10b981' },
+  'Inactivo': { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   dot: '#ef4444' },
+}
+
+// ── Componente Modal Detalle ──────────────────────────────────────────────────
+const ModalCliente = ({ cliente, onCerrar, onEditar, onEliminar }) => {
+  const [tab, setTab] = useState('proyectos')
+  const cfg = ESTADO_CFG[cliente.estado] || ESTADO_CFG['Activo']
+  const proyectos = cliente.proyectos || []
+
+  const estadosProy = {
+    total: proyectos.length,
+    activos: proyectos.filter(p => p.estado === 'En Progreso').length,
+    finalizados: proyectos.filter(p => p.estado === 'Finalizado').length,
+  }
+
+  return (
+    <div className="ads-modal-overlay" onClick={onCerrar}>
+      <div className="ads-modal ads-modal--lg" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="ads-modal-header">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <span
+                className="ads-badge"
+                style={{ color: cfg.color, background: cfg.bg }}
+              >
+                <span className="ads-dot" style={{ background: cfg.dot }} />
+                {cliente.estado}
+              </span>
+            </div>
+            <h2 className="ads-modal-title">{cliente.empresa}</h2>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            <button className="ads-btn ads-btn--secondary ads-btn--sm" onClick={() => { onCerrar(); onEditar(cliente); }}>✏️ Editar</button>
+            <button className="ads-btn ads-btn--danger ads-btn--sm" onClick={() => onEliminar(cliente.id, cliente.empresa)}>🗑️</button>
+            <button className="ads-modal-close" onClick={onCerrar}>✕</button>
+          </div>
+        </div>
+
+        {/* Quick info */}
+        <div className="ads-quickinfo ads-quickinfo--4">
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Contacto</span>
+            <span className="ads-qi-val">{cliente.nombre_contacto}</span>
+          </div>
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Email</span>
+            <span className="ads-qi-val" style={{ fontSize: '12px' }}>{cliente.email}</span>
+          </div>
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Teléfono</span>
+            <span className="ads-qi-val">{cliente.telefono || '—'}</span>
+          </div>
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Proyectos</span>
+            <span className="ads-qi-val" style={{ color: '#3b82f6', fontWeight: 700 }}>{estadosProy.total}</span>
+          </div>
+        </div>
+
+        {/* Mini stats proyectos */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+          {[
+            { label: 'Total', val: estadosProy.total,      color: '#3b82f6' },
+            { label: 'En Progreso', val: estadosProy.activos,    color: '#f59e0b' },
+            { label: 'Finalizados', val: estadosProy.finalizados, color: '#10b981' },
+          ].map(s => (
+            <div key={s.label} style={{
+              background: 'var(--ads-surface2)',
+              border: '1px solid var(--ads-border)',
+              borderRadius: '10px',
+              padding: '12px 16px',
+            }}>
+              <div className="ads-stat-label">{s.label}</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: s.color, marginTop: '4px' }}>{s.val}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div className="ads-tabs">
+          <button className={`ads-tab ${tab === 'proyectos' ? 'ads-tab--active' : ''}`} onClick={() => setTab('proyectos')}>
+            📁 Proyectos ({proyectos.length})
+          </button>
+        </div>
+
+        <div className="ads-tab-content">
+          {proyectos.length === 0 ? (
+            <div className="ads-empty">
+              <span className="ads-empty-icon">📂</span>
+              <p>Este cliente no tiene proyectos aún.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {proyectos.map(p => {
+                const pCfg = {
+                  'Planificación': { color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
+                  'En Progreso':   { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+                  'Finalizado':    { color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+                }[p.estado] || { color: '#64748b', bg: 'rgba(100,116,139,0.12)' }
+
+                return (
+                  <div key={p.id} style={{
+                    background: 'var(--ads-surface2)',
+                    border: '1px solid var(--ads-border)',
+                    borderRadius: '10px',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}>
+                    <div>
+                      <p style={{ color: 'var(--ads-text)', fontWeight: 600, margin: 0 }}>{p.nombre_proyecto}</p>
+                      {p.fecha_fin && (
+                        <p style={{ color: 'var(--ads-sub)', fontSize: '12px', margin: '3px 0 0', fontFamily: 'var(--ads-mono)' }}>
+                          Fin: {new Date(p.fecha_fin).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      )}
+                    </div>
+                    <span className="ads-badge" style={{ color: pCfg.color, background: pCfg.bg }}>
+                      {p.estado}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+// ── Componente Modal Formulario ───────────────────────────────────────────────
+const ModalForm = ({ editando, datos, onChange, onGuardar, onCerrar, enviando }) => (
+  <div className="ads-modal-overlay" onClick={onCerrar}>
+    <div className="ads-modal" onClick={e => e.stopPropagation()}>
+      <div className="ads-modal-header">
+        <h2 className="ads-modal-title">{editando ? '✏️ Editar Cliente' : '➕ Nuevo Cliente'}</h2>
+        <button className="ads-modal-close" onClick={onCerrar}>✕</button>
+      </div>
+
+      <form className="ads-form" onSubmit={onGuardar}>
+        <div className="ads-form-row ads-form-row--2">
+          <div className="ads-form-group">
+            <label className="ads-form-label">Empresa *</label>
+            <input className="ads-input" placeholder="Nombre de la empresa" required
+              value={datos.empresa} onChange={e => onChange({ ...datos, empresa: e.target.value })} />
+          </div>
+          <div className="ads-form-group">
+            <label className="ads-form-label">Contacto *</label>
+            <input className="ads-input" placeholder="Nombre del contacto" required
+              value={datos.nombre_contacto} onChange={e => onChange({ ...datos, nombre_contacto: e.target.value })} />
+          </div>
+        </div>
+        <div className="ads-form-row ads-form-row--2">
+          <div className="ads-form-group">
+            <label className="ads-form-label">Email *</label>
+            <input className="ads-input" type="email" placeholder="correo@empresa.com" required
+              value={datos.email} onChange={e => onChange({ ...datos, email: e.target.value })} />
+          </div>
+          <div className="ads-form-group">
+            <label className="ads-form-label">Teléfono</label>
+            <input className="ads-input" placeholder="+502 0000-0000"
+              value={datos.telefono} onChange={e => onChange({ ...datos, telefono: e.target.value })} />
+          </div>
+        </div>
+        <div className="ads-form-group">
+          <label className="ads-form-label">Estado</label>
+          <select className="ads-select" value={datos.estado} onChange={e => onChange({ ...datos, estado: e.target.value })}>
+            <option value="Activo">Activo</option>
+            <option value="Inactivo">Inactivo</option>
+          </select>
+        </div>
+        <div className="ads-form-actions">
+          <button type="submit" className="ads-btn ads-btn--primary" disabled={enviando}>
+            {enviando ? 'Guardando...' : editando ? 'Actualizar' : 'Registrar Cliente'}
+          </button>
+          <button type="button" className="ads-btn ads-btn--secondary" onClick={onCerrar}>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)
+
+// ── Vista principal ───────────────────────────────────────────────────────────
 const ClientesView = () => {
-  // --- ESTADOS ---
   const [clientes, setClientes] = useState([])
-  const [expandido, setExpandido] = useState(null)
-  const [mostrarForm, setMostrarForm] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [editandoId, setEditandoId] = useState(null)
   const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState(null);
+  const [filtroEstado, setFiltroEstado] = useState(null)
+  const [clienteDetalle, setClienteDetalle] = useState(null)
+  const [mostrarForm, setMostrarForm] = useState(false)
+  const [editandoId, setEditandoId] = useState(null)
+  const [enviando, setEnviando] = useState(false)
 
-  const [nuevoCliente, setNuevoCliente] = useState({
+  const [formData, setFormData] = useState({
     empresa: '', nombre_contacto: '', email: '', telefono: '', estado: 'Activo'
   })
 
-  // --- LÓGICA DE DATOS CON JWT ---
   const fetchClientes = async () => {
     try {
       setLoading(true)
-      // Usamos apiClient: ya no necesita URL completa ni configuración manual de headers
-      const response = await apiClient('/clientes')
-      
-      if (!response.ok) {
-        throw new Error('Error de autenticación o servidor');
-      }
-
-      const data = await response.json()
-      setClientes(data)
-    } catch (error) { 
-      console.error("Error al obtener clientes:", error) 
-    } finally { 
-      setLoading(false) 
-    }
+      const res = await apiClient('/clientes')
+      if (res.ok) setClientes(await res.json())
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
   }
 
   useEffect(() => { fetchClientes() }, [])
 
-  // --- LÓGICA DE FILTRADO ---
-  const clientesFiltrados = clientes.filter(c => {
-    const coincideBusqueda = 
-      c.empresa.toLowerCase().includes(busqueda.toLowerCase()) ||
-      c.nombre_contacto.toLowerCase().includes(busqueda.toLowerCase());
-    
-    let coincideEstado = true;
-    if (filtroEstado === 'Activo' || filtroEstado === 'Inactivo') {
-      coidinceEstado = c.estado === filtroEstado;
-    } else if (filtroEstado === 'Sin Proyectos') {
-      coidinceEstado = !c.proyectos || c.proyectos.length === 0;
-    }
-
-    return coincideBusqueda && coincideEstado;
-  });
-
-  // --- ESTADÍSTICAS ---
   const stats = {
-    total: clientes.length,
-    activos: clientes.filter(c => c.estado === 'Activo').length,
-    inactivos: clientes.filter(c => c.estado === 'Inactivo').length,
-    sinProyectos: clientes.filter(c => !c.proyectos || c.proyectos.length === 0).length
-  };
+    total:       clientes.length,
+    activos:     clientes.filter(c => c.estado === 'Activo').length,
+    inactivos:   clientes.filter(c => c.estado === 'Inactivo').length,
+    sinProyectos: clientes.filter(c => !c.proyectos || c.proyectos.length === 0).length,
+  }
 
-  // --- HANDLERS ---
-  const prepararEdicion = (c) => {
-    setNuevoCliente({
-      empresa: c.empresa,
-      nombre_contacto: c.nombre_contacto,
-      email: c.email,
-      telefono: c.telefono || '',
-      estado: c.estado
-    });
-    setEditandoId(c.id);
-    setMostrarForm(true);
-  };
+  const clientesFiltrados = clientes.filter(c => {
+    const term = busqueda.toLowerCase()
+    const coincide = c.empresa?.toLowerCase().includes(term) || c.nombre_contacto?.toLowerCase().includes(term)
+    const estado = filtroEstado === 'Sin Proyectos'
+      ? (!c.proyectos || c.proyectos.length === 0)
+      : filtroEstado ? c.estado === filtroEstado : true
+    return coincide && estado
+  })
 
-  const cerrarFormulario = () => {
-    setMostrarForm(false);
-    setEditandoId(null);
-    setNuevoCliente({ empresa: '', nombre_contacto: '', email: '', telefono: '', estado: 'Activo' });
-  };
-
-  const handleGuardarCliente = async (e) => {
-    e.preventDefault();
-    const endpoint = editandoId ? `/clientes/${editandoId}` : '/clientes';
-    const metodo = editandoId ? 'PUT' : 'POST';
-    
-    try {
-      const response = await apiClient(endpoint, {
-        method: metodo,
-        body: JSON.stringify(nuevoCliente)
-      });
-
-      if (response.ok) {
-        alert(editandoId ? "✅ Cliente actualizado" : "✅ Cliente guardado");
-        cerrarFormulario();
-        fetchClientes(); 
-      } else {
-        const errorData = await response.json();
-        alert("Error: " + (errorData.error || "No se pudo guardar"));
-      }
-    } catch (error) { 
-      console.error("Error en la operación:", error); 
+  const abrirForm = (cliente = null) => {
+    if (cliente) {
+      setFormData({ empresa: cliente.empresa, nombre_contacto: cliente.nombre_contacto, email: cliente.email, telefono: cliente.telefono || '', estado: cliente.estado })
+      setEditandoId(cliente.id)
+    } else {
+      setFormData({ empresa: '', nombre_contacto: '', email: '', telefono: '', estado: 'Activo' })
+      setEditandoId(null)
     }
-  };
+    setMostrarForm(true)
+  }
+
+  const cerrarForm = () => { setMostrarForm(false); setEditandoId(null) }
+
+  const handleGuardar = async (e) => {
+    e.preventDefault()
+    setEnviando(true)
+    try {
+      const endpoint = editandoId ? `/clientes/${editandoId}` : '/clientes'
+      const res = await apiClient(endpoint, { method: editandoId ? 'PUT' : 'POST', body: JSON.stringify(formData) })
+      if (res.ok) { cerrarForm(); fetchClientes() }
+    } catch (e) { console.error(e) }
+    finally { setEnviando(false) }
+  }
 
   const handleEliminar = async (id, nombre) => {
-    if (window.confirm(`¿Estás seguro de que deseas eliminar a ${nombre}?`)) {
-      try {
-        const response = await apiClient(`/clientes/${id}`, { method: 'DELETE' });
-        
-        if (response.ok) {
-          setClientes(clientes.filter(c => c.id !== id));
-          alert("🗑️ Cliente eliminado");
-        } else {
-          alert("No tienes permisos para eliminar o hubo un error.");
-        }
-      } catch (error) { 
-        console.error("Error al eliminar:", error); 
-      }
-    }
-  };
-
-  // --- ESTILO DE TARJETA DINÁMICA ---
-  const getCardStyle = (color, isActive) => ({
-    background: isActive ? '#2d3748' : '#1e293b',
-    padding: '12px 15px',
-    borderRadius: '10px',
-    borderLeft: `3px solid ${color}`,
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    transform: isActive ? 'scale(1.02)' : 'scale(1)',
-    boxShadow: isActive ? `0 0 10px ${color}44` : 'none',
-    borderTop: isActive ? '1px solid #334155' : 'none',
-    borderRight: isActive ? '1px solid #334155' : 'none',
-    borderBottom: isActive ? '1px solid #334155' : 'none'
-  });
+    if (!window.confirm(`¿Eliminar a ${nombre}?`)) return
+    const res = await apiClient(`/clientes/${id}`, { method: 'DELETE' })
+    if (res.ok) { setClienteDetalle(null); fetchClientes() }
+  }
 
   return (
-    <div className="dashboard-content">
-      
-      {/* 1. DASHBOARD DE ESTADÍSTICAS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        <div style={getCardStyle('#3b82f6', filtroEstado === null)} onClick={() => setFiltroEstado(null)}>
-          <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>TOTAL</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: 'white' }}>{stats.total}</h2>
-        </div>
+    <div className="ads-root">
 
-        <div style={getCardStyle('#10b981', filtroEstado === 'Activo')} onClick={() => setFiltroEstado(filtroEstado === 'Activo' ? null : 'Activo')}>
-          <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>ACTIVOS</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: '#10b981' }}>{stats.activos}</h2>
-        </div>
-
-        <div style={getCardStyle('#ef4444', filtroEstado === 'Inactivo')} onClick={() => setFiltroEstado(filtroEstado === 'Inactivo' ? null : 'Inactivo')}>
-          <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>INACTIVOS</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: '#ef4444' }}>{stats.inactivos}</h2>
-        </div>
-
-        <div style={getCardStyle('#f59e0b', filtroEstado === 'Sin Proyectos')} onClick={() => setFiltroEstado(filtroEstado === 'Sin Proyectos' ? null : 'Sin Proyectos')}>
-          <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 'bold' }}>SIN PROYECTOS</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: '#f59e0b' }}>{stats.sinProyectos}</h2>
-        </div>
+      {/* Stats */}
+      <div className="ads-stats">
+        {[
+          { label: 'Total',          val: stats.total,         color: '#3b82f6', filtro: null },
+          { label: 'Activos',        val: stats.activos,       color: '#10b981', filtro: 'Activo' },
+          { label: 'Inactivos',      val: stats.inactivos,     color: '#ef4444', filtro: 'Inactivo' },
+          { label: 'Sin Proyectos',  val: stats.sinProyectos,  color: '#f59e0b', filtro: 'Sin Proyectos' },
+        ].map(s => (
+          <div key={s.label}
+            className={`ads-stat-card ${filtroEstado === s.filtro ? 'ads-stat-card--active' : ''}`}
+            style={{ '--accent': s.color }}
+            onClick={() => setFiltroEstado(filtroEstado === s.filtro ? null : s.filtro)}
+          >
+            <span className="ads-stat-label">{s.label}</span>
+            <span className="ads-stat-val" style={{ color: s.color }}>{s.val}</span>
+          </div>
+        ))}
       </div>
 
-      {/* 2. CABECERA Y FILTROS */}
-      <div className="header-acciones">
-        <h1>Gestión de Clientes</h1>
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-          <input 
-            type="text" 
-            placeholder="🔍 Buscar cliente..." 
-            className="search-input"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            style={{ padding: '10px 15px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: 'white', width: '220px' }}
-          />
-
-          <button className="btn-save" onClick={() => mostrarForm ? cerrarFormulario() : setMostrarForm(true)}>
-            {mostrarForm ? 'Cerrar' : '+ Nuevo Cliente'}
-          </button>
-        </div>
+      {/* Toolbar */}
+      <div className="ads-toolbar">
+        <input className="ads-search" placeholder="🔍  Buscar empresa o contacto..."
+          value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+        <button className="ads-btn ads-btn--primary" onClick={() => abrirForm()}>+ Nuevo Cliente</button>
       </div>
 
-      {/* 3. FORMULARIO SEGURO */}
-      {mostrarForm && (
-        <section className="form-section animation-slide" style={{marginBottom: '25px'}}>
-          <h3>{editandoId ? `✏️ Editando: ${nuevoCliente.empresa}` : '➕ Registrar Nuevo Cliente'}</h3>
-          <form className="cliente-form" onSubmit={handleGuardarCliente}>
-            <input type="text" placeholder="Empresa" required value={nuevoCliente.empresa} onChange={e => setNuevoCliente({...nuevoCliente, empresa: e.target.value})} />
-            <input type="text" placeholder="Contacto" required value={nuevoCliente.nombre_contacto} onChange={e => setNuevoCliente({...nuevoCliente, nombre_contacto: e.target.value})} />
-            <input type="email" placeholder="Email" required value={nuevoCliente.email} onChange={e => setNuevoCliente({...nuevoCliente, email: e.target.value})} />
-            <input type="text" placeholder="Teléfono" value={nuevoCliente.telefono} onChange={e => setNuevoCliente({...nuevoCliente, telefono: e.target.value})} />
-            <select value={nuevoCliente.estado} onChange={e => setNuevoCliente({...nuevoCliente, estado: e.target.value})} style={{padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155'}}>
-              <option value="Activo">Activo</option>
-              <option value="Inactivo">Inactivo</option>
-            </select>
-            <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
-              <button type="submit" className="btn-save">{editandoId ? 'Actualizar Datos' : 'Registrar Cliente'}</button>
-              <button type="button" className="btn-secondary" onClick={cerrarFormulario}>Cancelar</button>
-            </div>
-          </form>
-        </section>
+      {/* Grid */}
+      {loading ? (
+        <div className="ads-loading"><div className="ads-spinner" /><span>Cargando clientes...</span></div>
+      ) : clientesFiltrados.length === 0 ? (
+        <div className="ads-empty"><span className="ads-empty-icon">🏢</span><p>No hay clientes que coincidan.</p></div>
+      ) : (
+        <div className="ads-grid">
+          {clientesFiltrados.map((c, i) => {
+            const cfg = ESTADO_CFG[c.estado] || ESTADO_CFG['Activo']
+            const numProyectos = c.proyectos?.length || 0
+            return (
+              <div key={c.id} className="ads-card" style={{ animationDelay: `${i * 0.04}s` }} onClick={() => setClienteDetalle(c)}>
+                {/* Top row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <span className="ads-badge" style={{ color: cfg.color, background: cfg.bg }}>
+                    <span className="ads-dot" style={{ background: cfg.dot }} />
+                    {c.estado}
+                  </span>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button className="ads-btn--icon" title="Editar"
+                      onClick={e => { e.stopPropagation(); abrirForm(c) }}>✏️</button>
+                    <button className="ads-btn--icon danger" title="Eliminar"
+                      onClick={e => { e.stopPropagation(); handleEliminar(c.id, c.empresa) }}>🗑️</button>
+                  </div>
+                </div>
+
+                {/* Empresa */}
+                <div>
+                  <h3 style={{ color: 'var(--ads-text)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>{c.empresa}</h3>
+                  <p style={{ color: 'var(--ads-sub)', fontSize: '13px', margin: '4px 0 0', fontFamily: 'var(--ads-mono)' }}>👤 {c.nombre_contacto}</p>
+                </div>
+
+                {/* Contacto info */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <p style={{ color: 'var(--ads-muted)', fontSize: '12px', margin: 0, fontFamily: 'var(--ads-mono)' }}>✉ {c.email}</p>
+                  {c.telefono && <p style={{ color: 'var(--ads-muted)', fontSize: '12px', margin: 0, fontFamily: 'var(--ads-mono)' }}>📞 {c.telefono}</p>}
+                </div>
+
+                {/* Footer */}
+                <div style={{
+                  borderTop: '1px solid var(--ads-border)',
+                  paddingTop: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}>
+                  <span style={{ color: 'var(--ads-sub)', fontSize: '12px', fontFamily: 'var(--ads-mono)' }}>
+                    {numProyectos} proyecto{numProyectos !== 1 ? 's' : ''}
+                  </span>
+                  <span style={{ color: 'var(--ads-blue)', fontSize: '12px' }}>Ver detalle →</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
 
-      {/* 4. TABLA DE DATOS */}
-      <section className="data-section">
-        {loading ? <p>Cargando información corporativa segura...</p> : (
-          <table className="empresa-table">
-            <thead>
-              <tr>
-                <th>Empresa</th><th>Contacto</th><th>Teléfono</th><th>Email</th><th>Estado</th><th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientesFiltrados.length === 0 ? (
-                <tr><td colSpan="6" style={{textAlign: 'center', padding: '20px', color: '#94a3b8'}}>No se encontraron clientes con este filtro.</td></tr>
-              ) : (
-                clientesFiltrados.map((c) => (
-                  <React.Fragment key={c.id}>
-                    <tr onClick={() => setExpandido(expandido === c.id ? null : c.id)} style={{ cursor: 'pointer' }}>
-                      <td><strong>{c.empresa}</strong></td>
-                      <td>{c.nombre_contacto}</td>
-                      <td>{c.telefono || 'Sin registro'}</td>
-                      <td>{c.email}</td>
-                      <td><span className={`badge ${c.estado}`}>{c.estado}</span></td>
-                      <td>
-                        <button className="btn-edit" onClick={(e) => { e.stopPropagation(); prepararEdicion(c); }}>✏️</button>
-                        <button className="btn-delete" onClick={(e) => { e.stopPropagation(); handleEliminar(c.id, c.empresa); }}>🗑️</button>
-                      </td>
-                    </tr>
-                    {expandido === c.id && (
-                      <tr className="row-detalles">
-                        <td colSpan="6">
-                          <div className="detalles-container" style={{background: '#1e293b', padding: '15px', borderRadius: '8px', margin: '5px 10px'}}>
-                            <h4 style={{color: '#3b82f6', marginBottom: '8px', fontSize: '0.9rem'}}>Proyectos vinculados</h4>
-                            {c.proyectos?.length > 0 ? (
-                              <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
-                                {c.proyectos.map((p) => (
-                                  <li key={p.id} style={{padding: '5px 0', borderBottom: '1px solid #334155', fontSize: '0.85rem'}}>
-                                    <strong>{p.nombre_proyecto}</strong> — <small style={{color: '#94a3b8'}}>{p.estado}</small>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.85rem' }}>⚠️ Sin proyectos asignados.</p>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
-      </section>
+      {/* Modal detalle */}
+      {clienteDetalle && (
+        <ModalCliente
+          cliente={clienteDetalle}
+          onCerrar={() => setClienteDetalle(null)}
+          onEditar={(c) => { abrirForm(c) }}
+          onEliminar={handleEliminar}
+        />
+      )}
+
+      {/* Modal form */}
+      {mostrarForm && (
+        <ModalForm
+          editando={!!editandoId}
+          datos={formData}
+          onChange={setFormData}
+          onGuardar={handleGuardar}
+          onCerrar={cerrarForm}
+          enviando={enviando}
+        />
+      )}
     </div>
   )
 }

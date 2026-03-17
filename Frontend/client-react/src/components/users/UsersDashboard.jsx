@@ -1,90 +1,147 @@
-import { useState, useEffect } from 'react' 
+import { useState, useEffect } from 'react'
 import './UsersDashboard.css'
-import Perfil from '../shared/perfil'
-import { apiClient } from '../../apiClient' // Importamos tu cliente con JWT
+import Perfil     from '../shared/perfil'
+import Chat       from '../shared/Chat'
 import TareasView from './TareasView'
+import { apiClient } from '../../apiClient'
+
+const ADMIN_ID = import.meta.env.VITE_ADMIN_ID
+
+const NAV_ITEMS = [
+  { id: 'tareas', icon: '✅', label: 'Mis Tareas'    },
+  { id: 'dudas',  icon: '💬', label: 'Chat de Dudas'  },
+  { id: 'perfil', icon: '⚙️', label: 'Configuración'  },
+]
 
 const UserDashboard = ({ session, handleLogout, logo }) => {
   const [seccionActual, setSeccionActual] = useState('tareas')
-  const [avatarUrl, setAvatarUrl] = useState(null)
+  const [avatarUrl,     setAvatarUrl]     = useState(null)
+  const [collapsed,     setCollapsed]     = useState(false)
 
-  const handleAvatarUpdate = (newUrl) => {
-    setAvatarUrl(newUrl)
-  }
-
-  // --- CAMBIO CLAVE: Usar apiClient para obtener el perfil desde Python ---
   useEffect(() => {
     const fetchAvatar = async () => {
       try {
         const userId = session?.user?.id
         if (!userId) return
-
         const res = await apiClient(`/perfiles/${userId}`)
         if (res.ok) {
           const data = await res.json()
-          if (data?.avatar_url) {
-            setAvatarUrl(data.avatar_url)
-          }
+          if (data?.avatar_url) setAvatarUrl(data.avatar_url)
         }
-      } catch (error) {
-        console.error("Error al obtener el avatar del dashboard:", error)
+      } catch (err) {
+        console.error('Error al obtener avatar:', err)
       }
     }
     fetchAvatar()
   }, [session?.user?.id])
-  
+
+  const tituloSeccion = NAV_ITEMS.find(n => n.id === seccionActual)
+  const nombreUsuario = session?.user?.user_metadata?.nombre || 'Usuario'
+
   return (
-    <div className="main-layout">
-      {/* BARRA LATERAL */}
-      <aside className="side-nav">
-        <div className="nav-logo-container">
-          <img src={logo} alt="Logo" className="nav-logo-img" />
-        </div>
-        <div className="button-group">
-          <button 
-            className={seccionActual === 'tareas' ? 'active' : ''} 
-            onClick={() => setSeccionActual('tareas')}
+    <div className={`usr-layout ${collapsed ? 'usr-layout--collapsed' : ''}`}>
+
+      {/* ── SIDEBAR ── */}
+      <aside className="usr-sidebar">
+
+        {/* Top: logo + colapsar */}
+        <div className="usr-sidebar-top">
+          {!collapsed && <img src={logo} alt="TechSolutions" className="usr-logo" />}
+          <button
+            className="usr-collapse-btn"
+            onClick={() => setCollapsed(c => !c)}
+            title={collapsed ? 'Expandir' : 'Colapsar'}
           >
-            ✅ Mis Tareas
-          </button>
-          <button 
-            className={seccionActual === 'dudas' ? 'active' : ''} 
-            onClick={() => setSeccionActual('dudas')}
-          >
-            💬 Chat de Dudas
-          </button>
-          <button 
-            className={seccionActual === 'perfil' ? 'active' : ''} 
-            onClick={() => setSeccionActual('perfil')}
-          >
-            ⚙️ Configuración
+            {collapsed ? '›' : '‹'}
           </button>
         </div>
-        <button onClick={handleLogout} className="logout-btn">Cerrar Sesión</button>
+
+        {/* Mini perfil */}
+        {!collapsed && (
+          <div className="usr-sidebar-profile">
+            <img
+              src={avatarUrl || 'https://via.placeholder.com/40'}
+              alt="avatar"
+              className="usr-sidebar-avatar"
+            />
+            <div>
+              <p className="usr-sidebar-name">{nombreUsuario}</p>
+              <p className="usr-sidebar-role">Colaborador</p>
+            </div>
+          </div>
+        )}
+
+        {/* Nav */}
+        <nav className="usr-nav">
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.id}
+              className={`usr-nav-item ${seccionActual === item.id ? 'usr-nav-item--active' : ''}`}
+              onClick={() => setSeccionActual(item.id)}
+              title={collapsed ? item.label : ''}
+            >
+              <span className="usr-nav-icon">{item.icon}</span>
+              {!collapsed && <span className="usr-nav-label">{item.label}</span>}
+            </button>
+          ))}
+        </nav>
+
+        {/* Logout */}
+        <button className="usr-logout" onClick={handleLogout}>
+          <span>🚪</span>
+          {!collapsed && <span>Cerrar sesión</span>}
+        </button>
       </aside>
 
-      {/* ÁREA DE CONTENIDO */}
-      <main className="content-area">
-        <header className="dashboard-header">
-          <div className="user-info-header">
-            <img 
-              src={avatarUrl || 'https://via.placeholder.com/40'} 
-              alt="Perfil" 
-              className="header-avatar" 
-            />
-            <p>Bienvenido, <strong>{session?.user?.user_metadata?.nombre || 'Usuario'}</strong></p>
+      {/* ── MAIN ── */}
+      <div className="usr-main">
+
+        {/* Topbar */}
+        <header className="usr-topbar">
+          <div className="usr-topbar-left">
+            <span className="usr-section-icon">{tituloSeccion?.icon}</span>
+            <div>
+              <h1 className="usr-section-title">{tituloSeccion?.label}</h1>
+              <p className="usr-section-sub">Portal del Colaborador</p>
+            </div>
+          </div>
+
+          <div className="usr-topbar-right">
+            <div className="usr-user-chip">
+              <img
+                src={avatarUrl || 'https://via.placeholder.com/36'}
+                alt="avatar"
+                className="usr-user-avatar"
+              />
+              <div className="usr-user-info">
+                <span className="usr-user-name">{nombreUsuario}</span>
+                <span className="usr-user-role">Colaborador</span>
+              </div>
+            </div>
           </div>
         </header>
 
-        <div className="dashboard-content">
-          {/* Asegúrate de que TareasView también use apiClient por dentro si consume datos */}
-          {seccionActual === 'tareas' && <TareasView usuarioId={session?.user?.id} />}
-          {seccionActual === 'dudas' && <h1>Centro de Ayuda</h1>}
-          {seccionActual === 'perfil' && (
-            <Perfil session={session} onAvatarUpdate={handleAvatarUpdate} />
+        {/* Content */}
+        <main className="usr-content">
+          {seccionActual === 'tareas' && (
+            <TareasView usuarioId={session?.user?.id} />
           )}
-        </div>
-      </main>
+
+          {seccionActual === 'dudas' && (
+            <div className="usr-chat-wrapper">
+              <Chat
+                otroUsuarioId={ADMIN_ID}
+                nombreOtro="Administrador"
+                avatarOtro={null}
+              />
+            </div>
+          )}
+
+          {seccionActual === 'perfil' && (
+            <Perfil session={session} onAvatarUpdate={setAvatarUrl} />
+          )}
+        </main>
+      </div>
     </div>
   )
 }

@@ -1,80 +1,387 @@
+/* =====================================================
+   USERSDASHBOARD.CSS — TechSolutions
+   Portal del Colaborador
+   Mismo sistema que AdminDashboard pero con acento
+   verde/teal para diferenciar el rol visualmente
+===================================================== */
 
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
 
-.dashboard-content {
-  padding: 40px;
-  animation: fadeIn 0.6s ease-out;
-  max-width: 1200px;
-  margin: 0 auto;
+/* ── Variables ─────────────────────────────────────── */
+:root {
+  --usr-sidebar-w:     220px;
+  --usr-sidebar-w-sm:  64px;
+  --usr-topbar-h:      64px;
+  --usr-bg:            #06090f;
+  --usr-sidebar-bg:    #080d14;
+  --usr-surface:       #0c1520;
+  --usr-surface2:      #111c2a;
+  --usr-border:        rgba(255,255,255,0.06);
+  --usr-border2:       rgba(255,255,255,0.11);
+  --usr-text:          #ddeeff;
+  --usr-sub:           #5a7a8a;
+  --usr-muted:         #2a3a4a;
+  --usr-accent:        #10b981;        /* Verde — diferencia del admin azul */
+  --usr-accent-dim:    rgba(16,185,129,0.12);
+  --usr-accent2:       #0ea572;
+  --usr-red:           #ef4444;
+  --usr-font:          'Syne', sans-serif;
+  --usr-mono:          'DM Mono', monospace;
 }
 
-.dashboard-header {
-  margin-bottom: 40px;
-  border-bottom: 1px solid #334155;
-  padding-bottom: 20px;
+/* ── Reset ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ── Layout raíz ───────────────────────────────────── */
+.usr-layout {
+  display: grid;
+  grid-template-columns: var(--usr-sidebar-w) 1fr;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--usr-bg);
+  font-family: var(--usr-font);
+  transition: grid-template-columns 0.25s ease;
 }
 
-/* Seccion del logo */
-
-.nav-logo-container {
-  padding: 10px 0 30px 0;
-  text-align: center;
-  display: flex;
-  justify-content: center;
+.usr-layout--collapsed {
+  grid-template-columns: var(--usr-sidebar-w-sm) 1fr;
 }
 
-.nav-logo-img {
-  width: 100%;
-  max-width: 150px; /* Un poco más compacto para el dashboard de usuario */
-  height: auto;
-  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.3));
-  transition: transform 0.3s ease;
-}
-
-.nav-logo-img:hover {
-  transform: scale(1.03);
-}
-
-/* Ajuste específico para botones de navegación */
-.side-nav .button-group button {
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 8px;
-  text-align: left;
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: 0.2s;
-}
-
-.side-nav .button-group button.active {
-  background: #3b82f6;
-  color: white;
-}
-
-.side-nav {
-  padding: 20px;
+/* ── Sidebar ───────────────────────────────────────── */
+.usr-sidebar {
+  background: var(--usr-sidebar-bg);
+  border-right: 1px solid var(--usr-border);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
 }
 
-.side-nav .button-group button:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.05);
-  color: #f8fafc;
+/* Línea de acento verde en el borde derecho */
+.usr-sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(16,185,129,0.35) 30%,
+    rgba(16,185,129,0.15) 70%,
+    transparent
+  );
 }
 
-.logout-btn {
-  margin-top: auto;
-  padding: 10px;
-  background: #ef4444;
-  color: white;
-  border: none;
-  border-radius: 6px;
+/* ── Sidebar top ───────────────────────────────────── */
+.usr-sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 16px 16px;
+  min-height: var(--usr-topbar-h);
+  border-bottom: 1px solid var(--usr-border);
+  flex-shrink: 0;
+}
+
+.usr-logo {
+  width: 100%;
+  max-width: 130px;
+  height: auto;
+  filter: drop-shadow(0 0 8px rgba(16,185,129,0.2));
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.usr-logo:hover {
+  transform: scale(1.03);
+  filter: drop-shadow(0 0 12px rgba(16,185,129,0.4));
+}
+
+.usr-collapse-btn {
+  background: var(--usr-surface2);
+  border: 1px solid var(--usr-border);
+  border-radius: 8px;
+  color: var(--usr-sub);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  font-size: 16px;
+  font-weight: 700;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+.usr-collapse-btn:hover {
+  color: var(--usr-text);
+  border-color: var(--usr-border2);
+}
+
+/* ── Mini perfil en sidebar ────────────────────────── */
+.usr-sidebar-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--usr-border);
+  flex-shrink: 0;
+}
+
+.usr-sidebar-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(16,185,129,0.35);
+  flex-shrink: 0;
+}
+
+.usr-sidebar-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--usr-text);
+  margin: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usr-sidebar-role {
+  font-size: 10.5px;
+  color: var(--usr-accent);
+  margin: 0;
+  font-family: var(--usr-mono);
+  letter-spacing: 0.5px;
+}
+
+/* ── Nav ───────────────────────────────────────────── */
+.usr-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 10px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.usr-nav::-webkit-scrollbar { display: none; }
+
+.usr-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--usr-sub);
+  font-family: var(--usr-font);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.usr-nav-item:hover {
+  background: var(--usr-surface2);
+  color: var(--usr-text);
+  border-color: var(--usr-border);
+}
+
+.usr-nav-item--active {
+  background: var(--usr-accent-dim);
+  color: var(--usr-accent);
+  border-color: rgba(16,185,129,0.25);
+}
+
+.usr-nav-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.usr-nav-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Logout ────────────────────────────────────────── */
+.usr-logout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(239,68,68,0.15);
+  background: rgba(239,68,68,0.06);
+  color: var(--usr-red);
+  font-family: var(--usr-font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.usr-logout:hover {
+  background: rgba(239,68,68,0.14);
+  border-color: rgba(239,68,68,0.35);
+}
+
+/* ── Main area ─────────────────────────────────────── */
+.usr-main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Topbar ────────────────────────────────────────── */
+.usr-topbar {
+  height: var(--usr-topbar-h);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  background: var(--usr-sidebar-bg);
+  border-bottom: 1px solid var(--usr-border);
+  gap: 16px;
+}
+
+.usr-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.usr-section-icon { font-size: 22px; flex-shrink: 0; }
+
+.usr-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--usr-text);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.usr-section-sub {
+  font-size: 11px;
+  color: var(--usr-sub);
+  margin: 0;
+  font-family: var(--usr-mono);
+  letter-spacing: 0.5px;
+}
+
+.usr-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+/* User chip en topbar */
+.usr-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--usr-surface2);
+  border: 1px solid var(--usr-border);
+  border-radius: 12px;
+  padding: 6px 14px 6px 6px;
+  transition: border-color 0.15s;
+}
+
+.usr-user-chip:hover { border-color: var(--usr-border2); }
+
+.usr-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(16,185,129,0.35);
+  flex-shrink: 0;
+}
+
+.usr-user-info { display: flex; flex-direction: column; gap: 1px; }
+
+.usr-user-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--usr-text);
+  line-height: 1.2;
+}
+
+.usr-user-role {
+  font-size: 10.5px;
+  color: var(--usr-accent);
+  font-family: var(--usr-mono);
+  letter-spacing: 0.5px;
+}
+
+/* ── Content ───────────────────────────────────────── */
+.usr-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+.usr-content::-webkit-scrollbar { width: 5px; }
+.usr-content::-webkit-scrollbar-track { background: transparent; }
+.usr-content::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+}
+
+/* ── Chat wrapper ──────────────────────────────────── */
+.usr-chat-wrapper {
+  height: calc(100vh - var(--usr-topbar-h) - 56px);
+  min-height: 0;
+}
+
+/* ── Compatibilidad con clases legacy ──────────────── */
+.dashboard-content {
+  animation: usrFadeIn 0.4s ease-out;
+}
+
+@keyframes usrFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animation-slide {
+  animation: usrSlide 0.3s ease-out;
+}
+
+@keyframes usrSlide {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .usr-layout {
+    grid-template-columns: 0 1fr;
+  }
+  .usr-layout--collapsed {
+    grid-template-columns: var(--usr-sidebar-w-sm) 1fr;
+  }
+  .usr-content  { padding: 20px 16px; }
+  .usr-topbar   { padding: 0 16px; }
+  .usr-sidebar-profile { display: none; }
 }

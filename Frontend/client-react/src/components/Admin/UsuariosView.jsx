@@ -1,251 +1,520 @@
 import React, { useState, useEffect } from 'react'
-import { apiClient } from '../../apiClient';
+import { apiClient } from '../../apiClient'
+import '../admin-design-system.css'
 
-const UsuariosView = () => {
-  const [usuarios, setUsuarios] = useState([])
-  const [tareasUsuario, setTareasUsuario] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [mostrarForm, setMostrarForm] = useState(false)
-  const [editandoId, setEditandoId] = useState(null)
-  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null)
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState(null)
-  
-  const [nuevoUsuario, setNuevoUsuario] = useState({
-    id_visual: '',
-    nombre: '',
-    email: '',
-    rol: 'Usuario',
-    biografia: '',
-    avatar_url: ''
-  })
+// ── Helpers seguros ───────────────────────────────────────────────────────────
+const estadoColor = (estado) => {
+  if (estado === 'Activo')   return { color: '#10b981', bg: 'rgba(16,185,129,0.12)',  dot: '#10b981' }
+  if (estado === 'Inactivo') return { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   dot: '#ef4444' }
+  return                              { color: '#64748b', bg: 'rgba(100,116,139,0.12)', dot: '#94a3b8' }
+}
 
-  // --- CARGA DE DATOS ---
+const rolColor = (rol) => {
+  if (rol === 'Admin')   return { color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' }
+  return                        { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' }
+}
+
+// ── Avatar con fallback seguro ────────────────────────────────────────────────
+const Avatar = ({ url, nombre, size = 42, fontSize = 16 }) => {
+  const inicial = nombre ? nombre.charAt(0).toUpperCase() : '?'
+  return (
+    <div
+      className="ads-avatar"
+      style={{ width: size, height: size, fontSize, flexShrink: 0 }}
+    >
+      {url ? (
+        <img
+          src={url}
+          alt={nombre || ''}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={e => { e.currentTarget.style.display = 'none' }}
+        />
+      ) : inicial}
+    </div>
+  )
+}
+
+// ── Componente principal ──────────────────────────────────────────────────────
+const UsuariosView = ({ onChatClick }) => {
+
+  // ── Estado ──────────────────────────────────────────────────────────────────
+  const [usuarios,          setUsuarios]          = useState([])
+  const [tareasUsuario,     setTareasUsuario]      = useState([])
+  const [loading,           setLoading]            = useState(true)
+  const [busqueda,          setBusqueda]           = useState('')
+  const [filtroEstado,      setFiltroEstado]       = useState(null)
+  const [usuarioDetalle,    setUsuarioDetalle]     = useState(null)
+  const [mostrarForm,       setMostrarForm]        = useState(false)
+  const [editandoId,        setEditandoId]         = useState(null)
+  const [tabDetalle,        setTabDetalle]         = useState('tareas')
+  const [enviando,          setEnviando]           = useState(false)
+
+  const formVacio = { id_visual: '', nombre: '', email: '', rol: 'Usuario', biografia: '', avatar_url: '', estado: 'Activo' }
+  const [formData, setFormData] = useState(formVacio)
+
+  // ── Fetch ────────────────────────────────────────────────────────────────────
   const fetchData = async () => {
     try {
       setLoading(true)
       const res = await apiClient('/perfiles')
       if (res.ok) setUsuarios(await res.json())
-    } catch (error) { 
-      console.error("Error cargando perfiles:", error) 
-    } finally { 
-      setLoading(false) 
+    } catch (err) {
+      console.error('Error cargando perfiles:', err)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const fetchTareasUsuario = async (userId) => {
+  const fetchTareas = async (userId) => {
     try {
       const res = await apiClient('/tareas')
-      const todas = await res.json()
-      // Filtramos localmente para saber qué tareas pertenecen al usuario
-      const filtradas = todas.filter(t => t.empleado_id === userId)
-      setTareasUsuario(filtradas)
-    } catch (error) { 
-      console.error("Error cargando tareas del usuario:", error) 
+      if (res.ok) {
+        const todas = await res.json()
+        setTareasUsuario(todas.filter(t => t.empleado_id === userId))
+      }
+    } catch (err) {
+      console.error('Error cargando tareas:', err)
     }
   }
 
   useEffect(() => { fetchData() }, [])
 
-  // --- CRUD ---
-  const handleGuardar = async (e) => {
-    e.preventDefault()
-    const endpoint = editandoId ? `/perfiles/${editandoId}` : '/perfiles'
-    const method = editandoId ? 'PUT' : 'POST'
-    
-    try {
-      const response = await apiClient(endpoint, {
-        method,
-        body: JSON.stringify(nuevoUsuario)
-      })
-      if (response.ok) {
-        cerrarFormulario()
-        fetchData()
-      }
-    } catch (error) {
-      console.error("Error al guardar usuario:", error)
-    }
-  }
-
+  // ── Stats ────────────────────────────────────────────────────────────────────
   const stats = {
-    total: usuarios.length,
-    activos: usuarios.filter(u => u.estado === 'Activo').length,
-    inactivos: usuarios.filter(u => u.estado === 'Inactivo').length
+    total:    usuarios.length,
+    activos:  usuarios.filter(u => u.estado === 'Activo').length,
+    inactivos:usuarios.filter(u => u.estado === 'Inactivo').length,
+    admins:   usuarios.filter(u => u.rol === 'Admin').length,
   }
 
-  const prepararEdicion = (u) => {
-    setNuevoUsuario({ ...u })
-    setEditandoId(u.id)
+  // ── Filtrado — 
+  const usuariosFiltrados = usuarios.filter(u => {
+    const term = busqueda.toLowerCase()
+
+    // null-safe: igual que el original pero sin depender de ?.
+    const nombre   = u.nombre    ? u.nombre.toLowerCase()           : ''
+    const email    = u.email     ? u.email.toLowerCase()            : ''
+    const idVisual = u.id_visual ? String(u.id_visual).toLowerCase() : ''
+
+    const coincideBusqueda = nombre.includes(term) || email.includes(term) || idVisual.includes(term)
+
+    let coincideFiltro = true
+    if (filtroEstado === '__admins__') {
+      coincideFiltro = u.rol === 'Admin'
+    } else if (filtroEstado !== null) {
+      coincideFiltro = u.estado === filtroEstado
+    }
+
+    return coincideBusqueda && coincideFiltro
+  })
+
+  // ── CRUD ─────────────────────────────────────────────────────────────────────
+  const abrirDetalle = (u) => {
+    setUsuarioDetalle(u)
+    setTabDetalle('tareas')
+    fetchTareas(u.id)
+  }
+
+  const cerrarDetalle = () => {
+    setUsuarioDetalle(null)
+    setTareasUsuario([])
+  }
+
+  const abrirForm = (u = null) => {
+    if (u) {
+      // Solo copiamos los campos conocidos para evitar campos extra de la DB
+      setFormData({
+        id_visual:  u.id_visual  || '',
+        nombre:     u.nombre     || '',
+        email:      u.email      || '',
+        rol:        u.rol        || 'Usuario',
+        biografia:  u.biografia  || '',
+        avatar_url: u.avatar_url || '',
+        estado:     u.estado     || 'Activo',
+      })
+      setEditandoId(u.id)
+    } else {
+      setFormData(formVacio)
+      setEditandoId(null)
+    }
     setMostrarForm(true)
   }
 
-  const cerrarFormulario = () => {
+  const cerrarForm = () => {
     setMostrarForm(false)
     setEditandoId(null)
-    setNuevoUsuario({ id_visual: '', nombre: '', email: '', rol: 'Usuario', biografia: '', avatar_url: '' })
+    setFormData(formVacio)
   }
 
-  const abrirDetalle = (u) => {
-    setUsuarioSeleccionado(u)
-    fetchTareasUsuario(u.id)
+  const handleGuardar = async (e) => {
+    e.preventDefault()
+    setEnviando(true)
+    try {
+      const endpoint = editandoId ? `/perfiles/${editandoId}` : '/perfiles'
+      const method   = editandoId ? 'PUT' : 'POST'
+      const res = await apiClient(endpoint, { method, body: JSON.stringify(formData) })
+      if (res.ok) { cerrarForm(); fetchData() }
+    } catch (err) {
+      console.error('Error guardando:', err)
+    } finally {
+      setEnviando(false)
+    }
   }
 
-  // --- FILTRADO ---
-  const usuariosFiltrados = usuarios.filter(u => {
-    const term = busqueda.toLowerCase()
-    const coincideBusqueda = 
-      u.nombre?.toLowerCase().includes(term) || 
-      u.email?.toLowerCase().includes(term) ||
-      u.id_visual?.toLowerCase().includes(term);
-    
-    const coincideEstado = filtroEstado ? u.estado === filtroEstado : true;
-    return coincideBusqueda && coincideEstado;
-  })
-
-  const getCardStyle = (color, isActive) => ({
-    background: isActive ? '#2d3748' : '#1e293b',
-    padding: '15px',
-    borderRadius: '12px',
-    borderLeft: `4px solid ${color}`,
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    transform: isActive ? 'scale(1.02)' : 'scale(1)',
-    display: 'flex',
-    flexDirection: 'column'
-  })
-
-  // --- SUB-VISTA: DETALLE ---
-  const DetalleUsuario = ({ user, alCerrar }) => (
-    <div className="animation-slide" style={{ background: '#1e293b', padding: '30px', borderRadius: '15px', border: '1px solid #334155' }}>
-      <button onClick={alCerrar} className="btn-secondary" style={{ marginBottom: '20px' }}>← Volver</button>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-            <div style={{ width: '70px', height: '70px', borderRadius: '50%', overflow: 'hidden', background: '#3b82f6' }}>
-              {user.avatar_url ? (
-                <img src={user.avatar_url} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', color: 'white', fontWeight: 'bold' }}>
-                  {user.nombre?.charAt(0)}
-                </div>
-              )}
-            </div>
-            <div>
-              <h2 style={{ color: 'white', margin: 0 }}>{user.nombre} <span style={{ color: '#475569', fontSize: '0.9rem' }}>#{user.id_visual}</span></h2>
-              <p style={{ color: '#3b82f6', margin: 0 }}>{user.email}</p>
-            </div>
-          </div>
-          
-          <h4 style={{ color: 'white', marginBottom: '15px' }}>Tareas Asignadas ({tareasUsuario.length})</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {tareasUsuario.length === 0 ? <p style={{color: '#475569'}}>Sin tareas asignadas actualmente.</p> : 
-              tareasUsuario.map(t => (
-                <div key={t.id} style={{ background: '#0f172a', padding: '15px', borderRadius: '8px', border: '1px solid #1e293b' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'white', fontWeight: 'bold' }}>{t.titulo}</span>
-                    <span className={`badge ${t.estado?.replace(/\s+/g, '-').toLowerCase()}`} style={{ fontSize: '0.6rem' }}>{t.estado}</span>
-                  </div>
-                  <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '5px 0 0 0' }}>Proyecto: {t.proyectos?.nombre_proyecto}</p>
-                </div>
-              ))
-            }
-          </div>
-        </div>
-
-        <div style={{ background: '#0f172a', borderRadius: '12px', padding: '20px', height: 'fit-content' }}>
-          <h4 style={{ color: '#64748b', marginBottom: '10px' }}>Perfil Profesional</h4>
-          <p style={{ color: '#cbd5e1', fontSize: '0.9rem' }}><strong>Rol:</strong> {user.rol}</p>
-          <div style={{ marginTop: '15px' }}>
-            <label style={{ color: '#475569', fontSize: '0.75rem', display: 'block' }}>BIO / NOTAS</label>
-            <p style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{user.biografia || "Sin descripción."}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="dashboard-content">
+    <div className="ads-root">
+
       {/* STATS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px', marginBottom: '25px' }}>
-        <div style={getCardStyle('#3b82f6', filtroEstado === null)} onClick={() => setFiltroEstado(null)}>
-          <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>TOTAL</span>
-          <h2 style={{ margin: 0, color: 'white' }}>{stats.total}</h2>
-        </div>
-        <div style={getCardStyle('#10b981', filtroEstado === 'Activo')} onClick={() => setFiltroEstado('Activo')}>
-          <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>ACTIVOS</span>
-          <h2 style={{ margin: 0, color: '#10b981' }}>{stats.activos}</h2>
-        </div>
-        <div style={getCardStyle('#ef4444', filtroEstado === 'Inactivo')} onClick={() => setFiltroEstado('Inactivo')}>
-          <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>INACTIVOS</span>
-          <h2 style={{ margin: 0, color: '#ef4444' }}>{stats.inactivos}</h2>
-        </div>
+      <div className="ads-stats">
+        {[
+          { label: 'Total',     val: stats.total,     color: '#3b82f6', filtro: null         },
+          { label: 'Activos',   val: stats.activos,   color: '#10b981', filtro: 'Activo'     },
+          { label: 'Inactivos', val: stats.inactivos, color: '#ef4444', filtro: 'Inactivo'   },
+          { label: 'Admins',    val: stats.admins,    color: '#8b5cf6', filtro: '__admins__' },
+        ].map(s => (
+          <div
+            key={s.label}
+            className={`ads-stat-card ${filtroEstado === s.filtro ? 'ads-stat-card--active' : ''}`}
+            style={{ '--accent': s.color }}
+            onClick={() => setFiltroEstado(filtroEstado === s.filtro ? null : s.filtro)}
+          >
+            <span className="ads-stat-label">{s.label}</span>
+            <span className="ads-stat-val" style={{ color: s.color }}>{s.val}</span>
+          </div>
+        ))}
       </div>
 
-      {usuarioSeleccionado ? (
-        <DetalleUsuario user={usuarioSeleccionado} alCerrar={() => setUsuarioSeleccionado(null)} />
+      {/* TOOLBAR */}
+      <div className="ads-toolbar">
+        <input
+          className="ads-search"
+          placeholder="🔍  Buscar colaborador, email o ID..."
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+        />
+        <button className="ads-btn ads-btn--primary" onClick={() => abrirForm()}>
+          + Nuevo Colaborador
+        </button>
+      </div>
+
+      {/* GRID */}
+      {loading ? (
+        <div className="ads-loading">
+          <div className="ads-spinner" />
+          <span>Cargando equipo...</span>
+        </div>
+      ) : usuariosFiltrados.length === 0 ? (
+        <div className="ads-empty">
+          <span className="ads-empty-icon">👥</span>
+          <p>No hay colaboradores que coincidan.</p>
+        </div>
       ) : (
-        <>
-          <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
-            <input 
-              type="text" 
-              placeholder="🔍 Buscar colaborador..." 
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#1e293b', color: 'white', border: '1px solid #334155' }}
-            />
-            <button className="btn-save" onClick={() => setMostrarForm(!mostrarForm)}>
-              {mostrarForm ? 'Cerrar' : '+ Nuevo Usuario'}
-            </button>
-          </div>
+        <div className="ads-grid">
+          {usuariosFiltrados.map((u, i) => {
+            const eCfg = estadoColor(u.estado)
+            const rCfg = rolColor(u.rol)
+            return (
+              <div
+                key={u.id}
+                className="ads-card"
+                style={{ animationDelay: `${i * 0.04}s` }}
+                onClick={() => abrirDetalle(u)}
+              >
+                {/* Fila superior: avatar + nombre + botones */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <Avatar url={u.avatar_url} nombre={u.nombre} size={44} fontSize={16} />
+                    <div>
+                      <h3 style={{ color: 'var(--ads-text)', fontWeight: 700, fontSize: '0.95rem', margin: 0 }}>
+                        {u.nombre || '—'}
+                      </h3>
+                      <p style={{ color: 'var(--ads-sub)', fontSize: '12px', margin: '3px 0 0', fontFamily: 'var(--ads-mono)' }}>
+                        {u.email || '—'}
+                      </p>
+                    </div>
+                  </div>
 
-          {mostrarForm && (
-            <section className="form-section animation-slide" style={{ marginBottom: '25px', background: '#1e293b', padding: '20px', borderRadius: '12px', border: '1px solid #334155' }}>
-              <h3 style={{ color: 'white', marginBottom: '15px' }}>{editandoId ? '✏️ Editar Perfil' : '👤 Nuevo Colaborador'}</h3>
-              <form onSubmit={handleGuardar} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr 1.2fr', gap: '15px' }}>
-                  <input type="text" placeholder="ID (EMP-01)" value={nuevoUsuario.id_visual} onChange={e => setNuevoUsuario({...nuevoUsuario, id_visual: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }} />
-                  <input type="text" placeholder="Nombre completo" value={nuevoUsuario.nombre} onChange={e => setNuevoUsuario({...nuevoUsuario, nombre: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }} />
-                  <input type="email" placeholder="Email" value={nuevoUsuario.email} onChange={e => setNuevoUsuario({...nuevoUsuario, email: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: '15px' }}>
-                  <textarea placeholder="Bio..." value={nuevoUsuario.biografia} onChange={e => setNuevoUsuario({...nuevoUsuario, biografia: e.target.value})} rows="4" style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', resize: 'none' }} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <select value={nuevoUsuario.rol} onChange={e => setNuevoUsuario({...nuevoUsuario, rol: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
-                      <option value="Usuario">Empleado</option>
-                      <option value="Admin">Admin</option>
-                    </select>
-                    <input type="text" placeholder="URL Avatar" value={nuevoUsuario.avatar_url} onChange={e => setNuevoUsuario({...nuevoUsuario, avatar_url: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }} />
+                  <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
+                    <button
+                      className="ads-btn--icon"
+                      title="Editar"
+                      onClick={e => { e.stopPropagation(); abrirForm(u) }}
+                    >✏️</button>
+                    {onChatClick && (
+                      <button
+                        className="ads-btn--icon"
+                        title={`Chat con ${u.nombre}`}
+                        onClick={e => { e.stopPropagation(); onChatClick(u) }}
+                        style={{ color: '#3b82f6', borderColor: 'rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.08)' }}
+                      >💬</button>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button type="submit" className="btn-save">{editandoId ? 'Actualizar' : 'Crear'}</button>
-                  <button type="button" className="btn-secondary" onClick={cerrarFormulario}>Cancelar</button>
-                </div>
-              </form>
-            </section>
-          )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-            {loading ? <p>Cargando equipo...</p> : usuariosFiltrados.map(u => (
-              <div key={u.id} className="proyecto-card" onClick={() => abrirDetalle(u)} style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', border: '1px solid #334155', cursor: 'pointer', position: 'relative' }}>
-                <span style={{ position: 'absolute', top: '10px', right: '15px', fontSize: '0.6rem', color: '#475569' }}>#{u.id_visual}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                  <div style={{ width: '50px', height: '50px', borderRadius: '50%', overflow: 'hidden', background: '#3b82f6' }}>
-                    {u.avatar_url ? <img src={u.avatar_url} alt={u.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>{u.nombre?.charAt(0)}</div>}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ color: '#f8fafc', margin: 0, fontSize: '1rem' }}>{u.nombre}</h3>
-                    <p style={{ color: '#64748b', fontSize: '0.75rem', margin: 0 }}>{u.email}</p>
-                  </div>
-                  <button onClick={(e) => { e.stopPropagation(); prepararEdicion(u); }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>✏️</button>
+                {/* Badges */}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <span className="ads-badge" style={{ color: eCfg.color, background: eCfg.bg }}>
+                    <span className="ads-dot" style={{ background: eCfg.dot }} />
+                    {u.estado || 'Sin estado'}
+                  </span>
+                  <span className="ads-badge" style={{ color: rCfg.color, background: rCfg.bg }}>
+                    {u.rol || 'Usuario'}
+                  </span>
+                  {u.id_visual && (
+                    <span style={{ fontFamily: 'var(--ads-mono)', fontSize: '11px', color: 'var(--ads-muted)', alignSelf: 'center' }}>
+                      #{u.id_visual}
+                    </span>
+                  )}
+                </div>
+
+                {/* Bio preview */}
+                {u.biografia && (
+                  <p style={{
+                    color: 'var(--ads-sub)', fontSize: '12.5px', margin: 0, lineHeight: 1.5,
+                    display: '-webkit-box', WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                  }}>
+                    {u.biografia}
+                  </p>
+                )}
+
+                {/* Footer */}
+                <div style={{ borderTop: '1px solid var(--ads-border)', paddingTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <span style={{ color: 'var(--ads-blue)', fontSize: '12px' }}>Ver perfil →</span>
                 </div>
               </div>
-            ))}
-          </div>
-        </>
+            )
+          })}
+        </div>
       )}
+
+      {/* ── MODAL DETALLE ── */}
+      {usuarioDetalle && (
+        <div className="ads-modal-overlay" onClick={cerrarDetalle}>
+          <div className="ads-modal ads-modal--lg" onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="ads-modal-header">
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                <Avatar url={usuarioDetalle.avatar_url} nombre={usuarioDetalle.nombre} size={60} fontSize={22} />
+                <div>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                    {usuarioDetalle.id_visual && (
+                      <span style={{ fontFamily: 'var(--ads-mono)', fontSize: '11px', color: 'var(--ads-sub)' }}>
+                        #{usuarioDetalle.id_visual}
+                      </span>
+                    )}
+                    <span className="ads-badge" style={{ color: estadoColor(usuarioDetalle.estado).color, background: estadoColor(usuarioDetalle.estado).bg }}>
+                      <span className="ads-dot" style={{ background: estadoColor(usuarioDetalle.estado).dot }} />
+                      {usuarioDetalle.estado || '—'}
+                    </span>
+                    <span className="ads-badge" style={{ color: rolColor(usuarioDetalle.rol).color, background: rolColor(usuarioDetalle.rol).bg }}>
+                      {usuarioDetalle.rol || 'Usuario'}
+                    </span>
+                  </div>
+                  <h2 className="ads-modal-title">{usuarioDetalle.nombre}</h2>
+                  <p style={{ color: 'var(--ads-sub)', fontSize: '13px', margin: '3px 0 0', fontFamily: 'var(--ads-mono)' }}>
+                    {usuarioDetalle.email}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', flexShrink: 0, alignSelf: 'flex-start' }}>
+                <button className="ads-btn ads-btn--secondary ads-btn--sm" onClick={() => { cerrarDetalle(); abrirForm(usuarioDetalle) }}>✏️ Editar</button>
+                {onChatClick && (
+                  <button className="ads-btn ads-btn--primary ads-btn--sm" onClick={() => onChatClick(usuarioDetalle)}>💬 Chat</button>
+                )}
+                <button className="ads-modal-close" onClick={cerrarDetalle}>✕</button>
+              </div>
+            </div>
+
+            {/* Quick stats */}
+            <div className="ads-quickinfo ads-quickinfo--4">
+              <div className="ads-qi-item">
+                <span className="ads-qi-label">Tareas</span>
+                <span className="ads-qi-val" style={{ color: '#3b82f6', fontWeight: 700 }}>{tareasUsuario.length}</span>
+              </div>
+              <div className="ads-qi-item">
+                <span className="ads-qi-label">En Progreso</span>
+                <span className="ads-qi-val" style={{ color: '#3b82f6', fontWeight: 700 }}>
+                  {tareasUsuario.filter(t => t.estado === 'En Progreso').length}
+                </span>
+              </div>
+              <div className="ads-qi-item">
+                <span className="ads-qi-label">Completadas</span>
+                <span className="ads-qi-val" style={{ color: '#10b981', fontWeight: 700 }}>
+                  {tareasUsuario.filter(t => t.estado === 'Completada').length}
+                </span>
+              </div>
+              <div className="ads-qi-item">
+                <span className="ads-qi-label">Avance prom.</span>
+                <span className="ads-qi-val" style={{ color: '#f59e0b', fontWeight: 700 }}>
+                  {tareasUsuario.length
+                    ? Math.round(tareasUsuario.reduce((a, t) => a + (t.avance || 0), 0) / tareasUsuario.length)
+                    : 0}%
+                </span>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="ads-tabs">
+              <button className={`ads-tab ${tabDetalle === 'tareas' ? 'ads-tab--active' : ''}`} onClick={() => setTabDetalle('tareas')}>
+                📋 Tareas ({tareasUsuario.length})
+              </button>
+              <button className={`ads-tab ${tabDetalle === 'perfil' ? 'ads-tab--active' : ''}`} onClick={() => setTabDetalle('perfil')}>
+                👤 Perfil
+              </button>
+            </div>
+
+            {/* Tab: Tareas */}
+            {tabDetalle === 'tareas' && (
+              <div className="ads-tab-content">
+                {tareasUsuario.length === 0 ? (
+                  <div className="ads-empty">
+                    <span className="ads-empty-icon">📋</span>
+                    <p>Sin tareas asignadas actualmente.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {tareasUsuario.map(t => {
+                      const TAREA_ESTADOS = {
+                        'Pendiente':   { color: '#64748b', bg: 'rgba(100,116,139,0.12)', dot: '#94a3b8' },
+                        'En Progreso': { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)',  dot: '#3b82f6' },
+                        'En Revisión': { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  dot: '#f59e0b' },
+                        'Completada':  { color: '#10b981', bg: 'rgba(16,185,129,0.12)',  dot: '#10b981' },
+                      }
+                      const tCfg = TAREA_ESTADOS[t.estado] || TAREA_ESTADOS['Pendiente']
+                      return (
+                        <div key={t.id} style={{ background: 'var(--ads-surface2)', border: '1px solid var(--ads-border)', borderRadius: '10px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ color: 'var(--ads-text)', fontWeight: 600, margin: 0, fontSize: '13.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t.titulo}
+                            </p>
+                            <p style={{ color: 'var(--ads-sub)', fontSize: '12px', margin: '3px 0 0', fontFamily: 'var(--ads-mono)' }}>
+                              📁 {t.proyectos?.nombre_proyecto || '—'}
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+                            <div style={{ width: '56px' }}>
+                              <div className="ads-progress-track">
+                                <div className="ads-progress-fill" style={{ width: `${t.avance || 0}%`, background: tCfg.dot }} />
+                              </div>
+                              <p style={{ color: 'var(--ads-sub)', fontSize: '10px', margin: '2px 0 0', textAlign: 'right', fontFamily: 'var(--ads-mono)' }}>
+                                {t.avance || 0}%
+                              </p>
+                            </div>
+                            <span className="ads-badge" style={{ color: tCfg.color, background: tCfg.bg }}>
+                              <span className="ads-dot" style={{ background: tCfg.dot }} />
+                              {t.estado}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab: Perfil */}
+            {tabDetalle === 'perfil' && (
+              <div className="ads-tab-content" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ background: 'var(--ads-surface2)', border: '1px solid var(--ads-border)', borderRadius: '10px', padding: '16px' }}>
+                  <p className="ads-panel-title">Información</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                    <div><span style={{ color: 'var(--ads-sub)' }}>Rol: </span><span style={{ color: 'var(--ads-text)' }}>{usuarioDetalle.rol || '—'}</span></div>
+                    <div><span style={{ color: 'var(--ads-sub)' }}>Estado: </span><span style={{ color: 'var(--ads-text)' }}>{usuarioDetalle.estado || '—'}</span></div>
+                    <div><span style={{ color: 'var(--ads-sub)' }}>Email: </span><span style={{ color: 'var(--ads-text)', fontFamily: 'var(--ads-mono)', fontSize: '12px' }}>{usuarioDetalle.email || '—'}</span></div>
+                  </div>
+                </div>
+                <div style={{ background: 'var(--ads-surface2)', border: '1px solid var(--ads-border)', borderRadius: '10px', padding: '16px' }}>
+                  <p className="ads-panel-title">Biografía</p>
+                  <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' }}>
+                    {usuarioDetalle.biografia || 'Sin descripción registrada.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL FORMULARIO ── */}
+      {mostrarForm && (
+        <div className="ads-modal-overlay" onClick={cerrarForm}>
+          <div className="ads-modal" onClick={e => e.stopPropagation()}>
+            <div className="ads-modal-header">
+              <h2 className="ads-modal-title">{editandoId ? '✏️ Editar Colaborador' : '👤 Nuevo Colaborador'}</h2>
+              <button className="ads-modal-close" onClick={cerrarForm}>✕</button>
+            </div>
+
+            <form className="ads-form" onSubmit={handleGuardar}>
+              <div className="ads-form-row ads-form-row--3">
+                <div className="ads-form-group">
+                  <label className="ads-form-label">ID Visual</label>
+                  <input className="ads-input" placeholder="EMP-01"
+                    value={formData.id_visual}
+                    onChange={e => setFormData({ ...formData, id_visual: e.target.value })} />
+                </div>
+                <div className="ads-form-group">
+                  <label className="ads-form-label">Nombre *</label>
+                  <input className="ads-input" placeholder="Nombre completo" required
+                    value={formData.nombre}
+                    onChange={e => setFormData({ ...formData, nombre: e.target.value })} />
+                </div>
+                <div className="ads-form-group">
+                  <label className="ads-form-label">Email *</label>
+                  <input className="ads-input" type="email" placeholder="correo@empresa.com" required
+                    value={formData.email}
+                    onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="ads-form-group">
+                <label className="ads-form-label">Biografía</label>
+                <textarea className="ads-textarea" placeholder="Habilidades, notas..." rows={4}
+                  value={formData.biografia}
+                  onChange={e => setFormData({ ...formData, biografia: e.target.value })} />
+              </div>
+
+              <div className="ads-form-row ads-form-row--3">
+                <div className="ads-form-group">
+                  <label className="ads-form-label">Rol</label>
+                  <select className="ads-select" value={formData.rol} onChange={e => setFormData({ ...formData, rol: e.target.value })}>
+                    <option value="Usuario">Empleado</option>
+                    <option value="Admin">Admin</option>
+                  </select>
+                </div>
+                <div className="ads-form-group">
+                  <label className="ads-form-label">Estado</label>
+                  <select className="ads-select" value={formData.estado} onChange={e => setFormData({ ...formData, estado: e.target.value })}>
+                    <option value="Activo">Activo</option>
+                    <option value="Inactivo">Inactivo</option>
+                  </select>
+                </div>
+                <div className="ads-form-group">
+                  <label className="ads-form-label">URL Avatar</label>
+                  <input className="ads-input" placeholder="https://..."
+                    value={formData.avatar_url}
+                    onChange={e => setFormData({ ...formData, avatar_url: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="ads-form-actions">
+                <button type="submit" className="ads-btn ads-btn--primary" disabled={enviando}>
+                  {enviando ? 'Guardando...' : editandoId ? 'Actualizar' : 'Crear Colaborador'}
+                </button>
+                <button type="button" className="ads-btn ads-btn--secondary" onClick={cerrarForm}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

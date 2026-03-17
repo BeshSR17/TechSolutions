@@ -1,5 +1,390 @@
-import React, { useState, useEffect } from 'react';
-import { apiClient } from '../../apiClient'; // Importamos tu cliente con JWT
+import React, { useState, useEffect, useRef } from 'react';
+import { apiClient } from '../../apiClient';
+import './TareasView.css';
+
+// ─── HELPERS ────────────────────────────────────────────────────────────────
+
+const PRIORIDAD_CONFIG = {
+  'Alta':   { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   icon: '🔴', label: 'Alta' },
+  'Media':  { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  icon: '🟡', label: 'Media' },
+  'Baja':   { color: '#10b981', bg: 'rgba(16,185,129,0.12)',  icon: '🟢', label: 'Baja' },
+};
+
+const ESTADO_CONFIG = {
+  'Pendiente':    { color: '#64748b', bg: 'rgba(100,116,139,0.15)', dot: '#94a3b8' },
+  'En Progreso':  { color: '#3b82f6', bg: 'rgba(59,130,246,0.15)',  dot: '#3b82f6' },
+  'En Revisión':  { color: '#f59e0b', bg: 'rgba(245,158,11,0.15)',  dot: '#f59e0b' },
+  'Completada':   { color: '#10b981', bg: 'rgba(16,185,129,0.15)',  dot: '#10b981' },
+};
+
+const calcDiasRestantes = (fechaFin) => {
+  if (!fechaFin) return null;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const fin = new Date(fechaFin);
+  fin.setHours(0, 0, 0, 0);
+  return Math.ceil((fin - hoy) / (1000 * 60 * 60 * 24));
+};
+
+const formatFecha = (f) => {
+  if (!f) return '—';
+  return new Date(f).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const AlertaDias = ({ dias }) => {
+  if (dias === null) return null;
+  if (dias < 0)  return <span className="tv-alerta tv-alerta--vencida">⚠ Vencida hace {Math.abs(dias)}d</span>;
+  if (dias === 0) return <span className="tv-alerta tv-alerta--hoy">🔥 Vence hoy</span>;
+  if (dias <= 3)  return <span className="tv-alerta tv-alerta--urgente">⏰ {dias}d restantes</span>;
+  if (dias <= 7)  return <span className="tv-alerta tv-alerta--pronto">📅 {dias}d restantes</span>;
+  return <span className="tv-alerta tv-alerta--ok">✓ {dias}d restantes</span>;
+};
+
+// ─── MODAL DE DETALLE ────────────────────────────────────────────────────────
+
+const ModalDetalle = ({ tarea, onCerrar, onActualizar }) => {
+  const [tab, setTab] = useState('info');
+  const [avance, setAvance] = useState(tarea.avance || 0);
+  const [comentario, setComentario] = useState('');
+  const [linkInput, setLinkInput] = useState('');
+  const [linkNombre, setLinkNombre] = useState('');
+
+  // Historial y comentarios guardados en localStorage por ahora
+  // (puedes migrar a Supabase cuando quieras)
+  const storageKey = `tarea_${tarea.id}`;
+  const [extras, setExtras] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey)) || { historial: [], comentarios: [], links: [] };
+    } catch { return { historial: [], comentarios: [], links: [] }; }
+  });
+
+  const saveExtras = (newExtras) => {
+    setExtras(newExtras);
+    localStorage.setItem(storageKey, JSON.stringify(newExtras));
+  };
+
+  const dias = calcDiasRestantes(tarea.fecha_finalizacion);
+  const prioridad = PRIORIDAD_CONFIG[tarea.prioridad] || PRIORIDAD_CONFIG['Baja'];
+  const estadoCfg = ESTADO_CONFIG[tarea.estado] || ESTADO_CONFIG['Pendiente'];
+
+  const handleAvanceChange = (val) => {
+    setAvance(val);
+  };
+
+  const handleAvanceCommit = (val) => {
+    onActualizar(tarea.id, { avance: val });
+    const entrada = {
+      fecha: new Date().toISOString(),
+      texto: `Avance actualizado a ${val}%`,
+      tipo: 'avance'
+    };
+    saveExtras({ ...extras, historial: [entrada, ...extras.historial] });
+  };
+
+  const handleEstado = (nuevoEstado) => {
+    onActualizar(tarea.id, { estado: nuevoEstado });
+    const entrada = {
+      fecha: new Date().toISOString(),
+      texto: `Estado cambiado a "${nuevoEstado}"`,
+      tipo: 'estado'
+    };
+    saveExtras({ ...extras, historial: [entrada, ...extras.historial] });
+  };
+
+  const agregarComentario = () => {
+    if (!comentario.trim()) return;
+    const nuevo = {
+      id: Date.now(),
+      fecha: new Date().toISOString(),
+      texto: comentario.trim()
+    };
+    saveExtras({ ...extras, comentarios: [nuevo, ...extras.comentarios] });
+    setComentario('');
+  };
+
+  const agregarLink = () => {
+    if (!linkInput.trim()) return;
+    const nuevo = {
+      id: Date.now(),
+      url: linkInput.trim(),
+      nombre: linkNombre.trim() || linkInput.trim(),
+      fecha: new Date().toISOString()
+    };
+    saveExtras({ ...extras, links: [nuevo, ...extras.links] });
+    setLinkInput('');
+    setLinkNombre('');
+  };
+
+  const eliminarLink = (id) => {
+    saveExtras({ ...extras, links: extras.links.filter(l => l.id !== id) });
+  };
+
+  const eliminarComentario = (id) => {
+    saveExtras({ ...extras, comentarios: extras.comentarios.filter(c => c.id !== id) });
+  };
+
+  return (
+    <div className="tv-modal-overlay" onClick={onCerrar}>
+      <div className="tv-modal" onClick={e => e.stopPropagation()}>
+
+        {/* Header del modal */}
+        <div className="tv-modal-header">
+          <div className="tv-modal-meta">
+            <span className="tv-codigo">{tarea.codigo_serie}</span>
+            <span className="tv-badge-prioridad" style={{ color: prioridad.color, background: prioridad.bg }}>
+              {prioridad.icon} {prioridad.label}
+            </span>
+            <span className="tv-badge-estado" style={{ color: estadoCfg.color, background: estadoCfg.bg }}>
+              <span className="tv-estado-dot" style={{ background: estadoCfg.dot }} />
+              {tarea.estado}
+            </span>
+          </div>
+          <button className="tv-modal-cerrar" onClick={onCerrar}>✕</button>
+        </div>
+
+        <h2 className="tv-modal-titulo">{tarea.titulo}</h2>
+
+        {/* Info rápida */}
+        <div className="tv-modal-quickinfo">
+          <div className="tv-qi-item">
+            <span className="tv-qi-label">Proyecto</span>
+            <span className="tv-qi-val">{tarea.proyectos?.nombre_proyecto || '—'}</span>
+          </div>
+          <div className="tv-qi-item">
+            <span className="tv-qi-label">Inicio</span>
+            <span className="tv-qi-val">{formatFecha(tarea.fecha_inicio)}</span>
+          </div>
+          <div className="tv-qi-item">
+            <span className="tv-qi-label">Vencimiento</span>
+            <span className="tv-qi-val">{formatFecha(tarea.fecha_finalizacion)}</span>
+          </div>
+          <div className="tv-qi-item">
+            <span className="tv-qi-label">Tiempo</span>
+            <AlertaDias dias={dias} />
+          </div>
+        </div>
+
+        {/* Avance */}
+        <div className="tv-avance-section">
+          <div className="tv-avance-label">
+            <span>Avance</span>
+            <strong>{avance}%</strong>
+          </div>
+          <div className="tv-progress-track">
+            <div className="tv-progress-fill" style={{ width: `${avance}%` }} />
+          </div>
+          <input
+            type="range" min="0" max="100"
+            value={avance}
+            onChange={e => handleAvanceChange(parseInt(e.target.value))}
+            onMouseUp={e => handleAvanceCommit(parseInt(e.target.value))}
+            onTouchEnd={e => handleAvanceCommit(avance)}
+            className="tv-range"
+          />
+        </div>
+
+        {/* Acciones de estado */}
+        <div className="tv-acciones">
+          {tarea.estado === 'Pendiente' && (
+            <button className="tv-btn tv-btn--primary" onClick={() => handleEstado('En Progreso')}>
+              ▶ Iniciar Tarea
+            </button>
+          )}
+          {tarea.estado === 'En Progreso' && (
+            <button className="tv-btn tv-btn--warning" onClick={() => handleEstado('En Revisión')}>
+              📤 Enviar a Revisión
+            </button>
+          )}
+          {tarea.estado === 'En Revisión' && (
+            <span className="tv-badge-estado" style={{ color: '#f59e0b', background: 'rgba(245,158,11,0.15)', padding: '8px 16px' }}>
+              ⏳ En espera de revisión del admin
+            </span>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="tv-tabs">
+          {['info', 'comentarios', 'adjuntos', 'historial'].map(t => (
+            <button
+              key={t}
+              className={`tv-tab ${tab === t ? 'tv-tab--active' : ''}`}
+              onClick={() => setTab(t)}
+            >
+              {t === 'info' && '📋 Instrucciones'}
+              {t === 'comentarios' && `💬 Notas ${extras.comentarios.length > 0 ? `(${extras.comentarios.length})` : ''}`}
+              {t === 'adjuntos' && `🔗 Links ${extras.links.length > 0 ? `(${extras.links.length})` : ''}`}
+              {t === 'historial' && `📜 Historial ${extras.historial.length > 0 ? `(${extras.historial.length})` : ''}`}
+            </button>
+          ))}
+        </div>
+
+        <div className="tv-tab-content">
+          {/* TAB: Info */}
+          {tab === 'info' && (
+            <div className="tv-instrucciones">
+              {tarea.instrucciones
+                ? <p>{tarea.instrucciones}</p>
+                : <p className="tv-empty">Sin instrucciones registradas.</p>
+              }
+            </div>
+          )}
+
+          {/* TAB: Comentarios */}
+          {tab === 'comentarios' && (
+            <div className="tv-comentarios">
+              <div className="tv-input-row">
+                <textarea
+                  className="tv-textarea"
+                  placeholder="Escribe una nota o comentario..."
+                  value={comentario}
+                  onChange={e => setComentario(e.target.value)}
+                  rows={2}
+                />
+                <button className="tv-btn tv-btn--primary tv-btn--sm" onClick={agregarComentario}>
+                  Agregar
+                </button>
+              </div>
+              {extras.comentarios.length === 0
+                ? <p className="tv-empty">Aún no hay notas. ¡Agrega la primera!</p>
+                : extras.comentarios.map(c => (
+                  <div key={c.id} className="tv-comentario-item">
+                    <p>{c.texto}</p>
+                    <div className="tv-comentario-meta">
+                      <span>{new Date(c.fecha).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      <button onClick={() => eliminarComentario(c.id)} className="tv-btn-eliminar">✕</button>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+
+          {/* TAB: Links */}
+          {tab === 'adjuntos' && (
+            <div className="tv-links">
+              <div className="tv-link-inputs">
+                <input
+                  className="tv-input"
+                  placeholder="URL (https://...)"
+                  value={linkInput}
+                  onChange={e => setLinkInput(e.target.value)}
+                />
+                <input
+                  className="tv-input"
+                  placeholder="Nombre del enlace (opcional)"
+                  value={linkNombre}
+                  onChange={e => setLinkNombre(e.target.value)}
+                />
+                <button className="tv-btn tv-btn--primary tv-btn--sm" onClick={agregarLink}>
+                  + Agregar
+                </button>
+              </div>
+              {extras.links.length === 0
+                ? <p className="tv-empty">No hay enlaces adjuntos.</p>
+                : extras.links.map(l => (
+                  <div key={l.id} className="tv-link-item">
+                    <span className="tv-link-icon">🔗</span>
+                    <div className="tv-link-info">
+                      <a href={l.url} target="_blank" rel="noopener noreferrer">{l.nombre}</a>
+                      <span className="tv-link-fecha">{formatFecha(l.fecha)}</span>
+                    </div>
+                    <button onClick={() => eliminarLink(l.id)} className="tv-btn-eliminar">✕</button>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+
+          {/* TAB: Historial */}
+          {tab === 'historial' && (
+            <div className="tv-historial">
+              {extras.historial.length === 0
+                ? <p className="tv-empty">El historial aparecerá aquí cuando realices cambios.</p>
+                : extras.historial.map((h, i) => (
+                  <div key={i} className="tv-historial-item">
+                    <div className={`tv-historial-dot tv-historial-dot--${h.tipo}`} />
+                    <div className="tv-historial-body">
+                      <p>{h.texto}</p>
+                      <span>{new Date(h.fecha).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+// ─── TARJETA DE TAREA ────────────────────────────────────────────────────────
+
+const TareaCard = ({ tarea, onClick, index }) => {
+  const dias = calcDiasRestantes(tarea.fecha_finalizacion);
+  const prioridad = PRIORIDAD_CONFIG[tarea.prioridad] || PRIORIDAD_CONFIG['Baja'];
+  const estadoCfg = ESTADO_CONFIG[tarea.estado] || ESTADO_CONFIG['Pendiente'];
+  const avance = tarea.avance || 0;
+
+  const esUrgente = dias !== null && dias <= 3;
+
+  return (
+    <div
+      className={`tv-card ${esUrgente ? 'tv-card--urgente' : ''}`}
+      style={{ animationDelay: `${index * 0.05}s` }}
+      onClick={onClick}
+    >
+      {/* Top row */}
+      <div className="tv-card-top">
+        <span className="tv-codigo">{tarea.codigo_serie}</span>
+        <span className="tv-badge-prioridad" style={{ color: prioridad.color, background: prioridad.bg }}>
+          {prioridad.icon} {prioridad.label}
+        </span>
+      </div>
+
+      {/* Título */}
+      <h3 className="tv-card-titulo">{tarea.titulo}</h3>
+
+      {/* Proyecto */}
+      {tarea.proyectos?.nombre_proyecto && (
+        <p className="tv-card-proyecto">📁 {tarea.proyectos.nombre_proyecto}</p>
+      )}
+
+      {/* Progress bar */}
+      <div className="tv-card-avance">
+        <div className="tv-card-avance-label">
+          <span>Avance</span>
+          <span>{avance}%</span>
+        </div>
+        <div className="tv-progress-track">
+          <div
+            className="tv-progress-fill"
+            style={{ width: `${avance}%`, background: estadoCfg.dot }}
+          />
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="tv-card-footer">
+        <span className="tv-badge-estado" style={{ color: estadoCfg.color, background: estadoCfg.bg }}>
+          <span className="tv-estado-dot" style={{ background: estadoCfg.dot }} />
+          {tarea.estado}
+        </span>
+        <AlertaDias dias={dias} />
+      </div>
+
+      {/* Fechas */}
+      <div className="tv-card-fechas">
+        <span>📅 {formatFecha(tarea.fecha_inicio)}</span>
+        <span>→</span>
+        <span>{formatFecha(tarea.fecha_finalizacion)}</span>
+      </div>
+    </div>
+  );
+};
+
+// ─── VISTA PRINCIPAL ─────────────────────────────────────────────────────────
 
 const TareasView = ({ usuarioId }) => {
   const [tareas, setTareas] = useState([]);
@@ -7,18 +392,13 @@ const TareasView = ({ usuarioId }) => {
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState(null);
+  const [filtroPrioridad, setFiltroPrioridad] = useState(null);
 
-  // --- 1. CARGA DE TAREAS VÍA API (JWT) ---
   const fetchMisTareas = async () => {
     try {
       setLoading(true);
-      // Asumimos que tu backend Python tiene este endpoint que ya filtra por el usuario del token
-      const res = await apiClient(`/tareas/mis-tareas`); 
-      
-      if (res.ok) {
-        const data = await res.json();
-        setTareas(data);
-      }
+      const res = await apiClient('/tareas/mis-tareas');
+      if (res.ok) setTareas(await res.json());
     } catch (error) {
       console.error("Error cargando tareas:", error);
     } finally {
@@ -30,18 +410,16 @@ const TareasView = ({ usuarioId }) => {
     if (usuarioId) fetchMisTareas();
   }, [usuarioId]);
 
-  // --- 2. ACTUALIZACIÓN DE TAREA (JWT) ---
   const actualizarTarea = async (id, cambios) => {
     try {
       const res = await apiClient(`/tareas/${id}`, {
         method: 'PUT',
         body: JSON.stringify(cambios)
       });
-      
       if (res.ok) {
-        setTareas(tareas.map(t => t.id === id ? { ...t, ...cambios } : t));
+        setTareas(prev => prev.map(t => t.id === id ? { ...t, ...cambios } : t));
         if (tareaSeleccionada?.id === id) {
-          setTareaSeleccionada({ ...tareaSeleccionada, ...cambios });
+          setTareaSeleccionada(prev => ({ ...prev, ...cambios }));
         }
       }
     } catch (error) {
@@ -49,138 +427,105 @@ const TareasView = ({ usuarioId }) => {
     }
   };
 
-  // --- LÓGICA DE FILTRADO (UI) ---
-  const tareasFiltradas = tareas.filter(t => {
-    const titulo = (t.titulo || '').toLowerCase();
-    const codigo = (t.codigo_serie || '').toLowerCase();
-    const busquedaLower = busqueda.toLowerCase();
-
-    const coincideBusqueda = titulo.includes(busquedaLower) || codigo.includes(busquedaLower);
-    const coincideEstado = filtroEstado ? t.estado === filtroEstado : true;
-
-    return coincideBusqueda && coincideEstado;
-  });
-
-  // --- ESTADÍSTICAS ---
   const stats = {
     total: tareas.length,
     pendiente: tareas.filter(t => t.estado === 'Pendiente').length,
     enProgreso: tareas.filter(t => t.estado === 'En Progreso').length,
     enRevision: tareas.filter(t => t.estado === 'En Revisión').length,
+    urgentes: tareas.filter(t => {
+      const d = calcDiasRestantes(t.fecha_finalizacion);
+      return d !== null && d <= 3 && t.estado !== 'Completada';
+    }).length,
   };
 
-  const getCardStyle = (color, isActive) => ({
-    background: isActive ? '#2d3748' : '#1e293b',
-    padding: '12px 15px',
-    borderRadius: '10px',
-    borderLeft: `3px solid ${color}`,
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    transform: isActive ? 'scale(1.02)' : 'scale(1)',
-    boxShadow: isActive ? `0 0 10px ${color}44` : 'none',
+  const tareasFiltradas = tareas.filter(t => {
+    const busq = busqueda.toLowerCase();
+    const coincideBusqueda =
+      (t.titulo || '').toLowerCase().includes(busq) ||
+      (t.codigo_serie || '').toLowerCase().includes(busq);
+    const coincideEstado = filtroEstado ? t.estado === filtroEstado : true;
+    const coincidePrioridad = filtroPrioridad ? t.prioridad === filtroPrioridad : true;
+    return coincideBusqueda && coincideEstado && coincidePrioridad;
   });
 
   return (
-    <div className="dashboard-content">
-      
-      {/* 1. DASHBOARD DE ESTADÍSTICAS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        <div style={getCardStyle('#3b82f6', filtroEstado === null)} onClick={() => setFiltroEstado(null)}>
-          <span style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 'bold' }}>TOTAL TAREAS</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: 'white' }}>{stats.total}</h2>
-        </div>
-        <div style={getCardStyle('#ef4444', filtroEstado === 'Pendiente')} onClick={() => setFiltroEstado('Pendiente')}>
-          <span style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 'bold' }}>PENDIENTES</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: '#ef4444' }}>{stats.pendiente}</h2>
-        </div>
-        <div style={getCardStyle('#f59e0b', filtroEstado === 'En Progreso')} onClick={() => setFiltroEstado('En Progreso')}>
-          <span style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 'bold' }}>EN CURSO</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: '#f59e0b' }}>{stats.enProgreso}</h2>
-        </div>
-        <div style={getCardStyle('#10b981', filtroEstado === 'En Revisión')} onClick={() => setFiltroEstado('En Revisión')}>
-          <span style={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 'bold' }}>EN REVISIÓN</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '1.4rem', color: '#10b981' }}>{stats.enRevision}</h2>
-        </div>
+    <div className="tv-root">
+
+      {/* ── STATS ── */}
+      <div className="tv-stats">
+        {[
+          { label: 'Total', val: stats.total,      color: '#3b82f6', filtro: null },
+          { label: 'Pendiente', val: stats.pendiente,  color: '#64748b', filtro: 'Pendiente' },
+          { label: 'En Curso',  val: stats.enProgreso, color: '#3b82f6', filtro: 'En Progreso' },
+          { label: 'Revisión',  val: stats.enRevision, color: '#f59e0b', filtro: 'En Revisión' },
+          { label: '⚠ Urgentes', val: stats.urgentes,  color: '#ef4444', filtro: '__urgentes__' },
+        ].map(s => (
+          <div
+            key={s.label}
+            className={`tv-stat-card ${filtroEstado === s.filtro ? 'tv-stat-card--active' : ''}`}
+            style={{ '--accent': s.color }}
+            onClick={() => setFiltroEstado(filtroEstado === s.filtro ? null : s.filtro)}
+          >
+            <span className="tv-stat-label">{s.label}</span>
+            <span className="tv-stat-val" style={{ color: s.color }}>{s.val}</span>
+          </div>
+        ))}
       </div>
 
-      {/* 2. BARRA DE BÚSQUEDA */}
-      <div style={{ marginBottom: '20px' }}>
-        <input 
-          type="text" 
-          placeholder="🔍 Buscar por título o código de serie..." 
+      {/* ── FILTROS ── */}
+      <div className="tv-filtros">
+        <input
+          className="tv-search"
+          type="text"
+          placeholder="🔍  Buscar por título o código..."
           value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          style={{ width: '100%', padding: '12px', borderRadius: '8px', background: '#1e293b', color: 'white', border: '1px solid #334155' }}
+          onChange={e => setBusqueda(e.target.value)}
         />
-      </div>
-
-      {/* 3. CONTENIDO PRINCIPAL */}
-      <div style={{ display: 'grid', gridTemplateColumns: tareaSeleccionada ? '1fr 1.2fr' : '1fr', gap: '25px' }}>
-        
-        {/* LISTA FILTRADA */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {loading ? <p style={{ color: '#94a3b8' }}>Cargando tareas...</p> : 
-           tareasFiltradas.length === 0 ? <p style={{ color: '#94a3b8' }}>No hay tareas que coincidan.</p> :
-           tareasFiltradas.map(t => (
-            <div 
-              key={t.id} 
-              onClick={() => setTareaSeleccionada(t)}
-              style={{ 
-                background: '#1e293b', padding: '15px', borderRadius: '10px', 
-                border: tareaSeleccionada?.id === t.id ? '2px solid #3b82f6' : '1px solid #334155',
-                cursor: 'pointer'
-              }}
+        <div className="tv-filtros-prioridad">
+          {[null, 'Alta', 'Media', 'Baja'].map(p => (
+            <button
+              key={p ?? 'todas'}
+              className={`tv-chip ${filtroPrioridad === p ? 'tv-chip--active' : ''}`}
+              onClick={() => setFiltroPrioridad(p)}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ color: '#3b82f6', fontSize: '0.7rem', fontWeight: 'bold' }}>{t.codigo_serie}</span>
-                <span className={`badge ${t.priodidad?.toLowerCase() || 'baja'}`}>{t.priodidad}</span>
-              </div>
-              <h4 style={{ color: 'white', margin: '0 0 8px 0' }}>{t.titulo}</h4>
-              <div style={{ background: '#0f172a', borderRadius: '10px', height: '5px' }}>
-                <div style={{ width: `${t.avance || 0}%`, background: '#3b82f6', height: '100%', borderRadius: '10px' }}></div>
-              </div>
-            </div>
+              {p === null ? 'Todas' : `${PRIORIDAD_CONFIG[p].icon} ${p}`}
+            </button>
           ))}
         </div>
-
-        {/* DETALLE LATERAL */}
-        {tareaSeleccionada && (
-          <div className="animation-slide" style={{ background: '#1e293b', padding: '25px', borderRadius: '15px', border: '1px solid #334155', height: 'fit-content', position: 'sticky', top: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <div>
-                <span style={{ color: '#3b82f6', fontSize: '0.8rem', fontWeight: 'bold' }}>CÓDIGO: {tareaSeleccionada.codigo_serie}</span>
-                <h3 style={{ color: 'white', margin: '5px 0 0 0' }}>{tareaSeleccionada.titulo}</h3>
-              </div>
-              <button onClick={() => setTareaSeleccionada(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
-            </div>
-
-            <div style={{ padding: '15px', background: '#0f172a', borderRadius: '10px', marginBottom: '20px' }}>
-              <p style={{ color: '#cbd5e1', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
-                {tareaSeleccionada.instrucciones || "Sin instrucciones."}
-              </p>
-            </div>
-
-            <div style={{ marginBottom: '25px' }}>
-              <label style={{ color: 'white', display: 'block', marginBottom: '10px' }}>Avance actual: {tareaSeleccionada.avance}%</label>
-              <input 
-                type="range" min="0" max="100" 
-                value={tareaSeleccionada.avance || 0}
-                onChange={(e) => setTareaSeleccionada({...tareaSeleccionada, avance: parseInt(e.target.value)})}
-                onMouseUp={(e) => actualizarTarea(tareaSeleccionada.id, { avance: parseInt(e.target.value) })}
-                style={{ width: '100%', accentColor: '#3b82f6' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {tareaSeleccionada.estado === 'Pendiente' ? (
-                <button className="btn-save" style={{ flex: 1 }} onClick={() => actualizarTarea(tareaSeleccionada.id, { estado: 'En Progreso' })}>Aceptar Tarea</button>
-              ) : (
-                <button className="btn-secondary" style={{ flex: 1, color: '#10b981', border: '1px solid #10b981', background: 'transparent', padding: '10px', borderRadius: '8px', cursor: 'pointer' }} onClick={() => actualizarTarea(tareaSeleccionada.id, { estado: 'En Revisión' })}>Enviar a Revisión</button>
-              )}
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* ── GRID ── */}
+      {loading ? (
+        <div className="tv-loading">
+          <div className="tv-spinner" />
+          <span>Cargando tareas...</span>
+        </div>
+      ) : tareasFiltradas.length === 0 ? (
+        <div className="tv-empty-state">
+          <span className="tv-empty-icon">📭</span>
+          <p>No hay tareas que coincidan con tu búsqueda.</p>
+        </div>
+      ) : (
+        <div className="tv-grid">
+          {tareasFiltradas.map((t, i) => (
+            <TareaCard
+              key={t.id}
+              tarea={t}
+              index={i}
+              onClick={() => setTareaSeleccionada(t)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── MODAL ── */}
+      {tareaSeleccionada && (
+        <ModalDetalle
+          tarea={tareaSeleccionada}
+          onCerrar={() => setTareaSeleccionada(null)}
+          onActualizar={actualizarTarea}
+        />
+      )}
     </div>
   );
 };

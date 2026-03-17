@@ -1,308 +1,400 @@
 import React, { useState, useEffect } from 'react'
-import { apiClient } from '../../apiClient'; // Importante para la persistencia del JWT
+import { apiClient } from '../../apiClient'
+import '../admin-design-system.css'
 
-const TareasView = () => {
-  // --- ESTADOS ---
+// ── Configs ───────────────────────────────────────────────────────────────────
+const PRIORIDAD_CFG = {
+  'Urgente': { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   icon: '🔴' },
+  'Alta':    { color: '#f97316', bg: 'rgba(249,115,22,0.12)',  icon: '🟠' },
+  'Media':   { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', icon: '🟡' },
+  'Baja':    { color: '#10b981', bg: 'rgba(16,185,129,0.12)', icon: '🟢' },
+}
+
+const ESTADO_CFG = {
+  'Pendiente':   { color: '#64748b', bg: 'rgba(100,116,139,0.15)', dot: '#94a3b8' },
+  'En Progreso': { color: '#3b82f6', bg: 'rgba(59,130,246,0.15)',  dot: '#3b82f6' },
+  'En Revisión': { color: '#f59e0b', bg: 'rgba(245,158,11,0.15)',  dot: '#f59e0b' },
+  'Completada':  { color: '#10b981', bg: 'rgba(16,185,129,0.15)',  dot: '#10b981' },
+}
+
+const formatFecha = f => f ? new Date(f).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+
+// ── Modal Detalle ─────────────────────────────────────────────────────────────
+const ModalTarea = ({ tarea, onCerrar, onEditar, onEliminar, onActualizar }) => {
+  const pCfg = PRIORIDAD_CFG[tarea.prioridad] || PRIORIDAD_CFG['Baja']
+  const eCfg = ESTADO_CFG[tarea.estado] || ESTADO_CFG['Pendiente']
+
+  const cambiarEstado = async (estado) => {
+    await onActualizar(tarea.id, { estado })
+  }
+
+  return (
+    <div className="ads-modal-overlay" onClick={onCerrar}>
+      <div className="ads-modal ads-modal--lg" onClick={e => e.stopPropagation()}>
+
+        <div className="ads-modal-header">
+          <div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <span className="ads-code">{tarea.codigo_serie}</span>
+              <span className="ads-badge" style={{ color: pCfg.color, background: pCfg.bg }}>{pCfg.icon} {tarea.prioridad}</span>
+              <span className="ads-badge" style={{ color: eCfg.color, background: eCfg.bg }}>
+                <span className="ads-dot" style={{ background: eCfg.dot }} />{tarea.estado}
+              </span>
+            </div>
+            <h2 className="ads-modal-title">{tarea.titulo}</h2>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            <button className="ads-btn ads-btn--secondary ads-btn--sm" onClick={() => { onCerrar(); onEditar(tarea) }}>✏️</button>
+            <button className="ads-btn ads-btn--danger ads-btn--sm" onClick={() => onEliminar(tarea.id)}>🗑️</button>
+            <button className="ads-modal-close" onClick={onCerrar}>✕</button>
+          </div>
+        </div>
+
+        {/* Quick info */}
+        <div className="ads-quickinfo ads-quickinfo--4">
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Proyecto</span>
+            <span className="ads-qi-val">{tarea.proyectos?.nombre_proyecto || '—'}</span>
+          </div>
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Cliente</span>
+            <span className="ads-qi-val">{tarea.proyectos?.clientes?.empresa || '—'}</span>
+          </div>
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Responsable</span>
+            <span className="ads-qi-val">{tarea.perfiles?.nombre || '—'}</span>
+          </div>
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Avance</span>
+            <span className="ads-qi-val" style={{ color: '#10b981', fontWeight: 700 }}>{tarea.avance || 0}%</span>
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--ads-sub)', marginBottom: '8px', fontFamily: 'var(--ads-mono)' }}>
+            <span>Avance de la tarea</span><span>{tarea.avance || 0}%</span>
+          </div>
+          <div className="ads-progress-track" style={{ height: '8px' }}>
+            <div className="ads-progress-fill" style={{ width: `${tarea.avance || 0}%`, background: eCfg.dot }} />
+          </div>
+        </div>
+
+        {/* Fechas */}
+        <div className="ads-quickinfo ads-quickinfo--2">
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Fecha Inicio</span>
+            <span className="ads-qi-val">{formatFecha(tarea.fecha_inicio)}</span>
+          </div>
+          <div className="ads-qi-item">
+            <span className="ads-qi-label">Fecha Fin</span>
+            <span className="ads-qi-val">{formatFecha(tarea.fecha_finalizacion)}</span>
+          </div>
+        </div>
+
+        {/* Acciones de estado rápido */}
+        <div>
+          <p className="ads-panel-title">Cambiar estado</p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {Object.entries(ESTADO_CFG).map(([estado, cfg]) => (
+              <button key={estado}
+                onClick={() => cambiarEstado(estado)}
+                className="ads-btn ads-btn--sm"
+                style={{
+                  background: tarea.estado === estado ? cfg.bg : 'var(--ads-surface2)',
+                  color: tarea.estado === estado ? cfg.color : 'var(--ads-sub)',
+                  border: `1px solid ${tarea.estado === estado ? cfg.color + '55' : 'var(--ads-border)'}`,
+                }}
+              >
+                <span className="ads-dot" style={{ background: cfg.dot, display: 'inline-block', marginRight: '5px' }} />
+                {estado}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Instrucciones */}
+        {tarea.instrucciones && (
+          <div style={{ background: 'var(--ads-surface2)', borderRadius: '10px', padding: '16px', border: '1px solid var(--ads-border)' }}>
+            <p className="ads-panel-title" style={{ margin: '0 0 8px' }}>Instrucciones</p>
+            <p style={{ color: '#94a3b8', fontSize: '14px', lineHeight: '1.7', margin: 0, whiteSpace: 'pre-wrap' }}>{tarea.instrucciones}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Modal Form ────────────────────────────────────────────────────────────────
+const ModalForm = ({ editando, datos, onChange, onGuardar, onCerrar, enviando, proyectos, usuarios }) => (
+  <div className="ads-modal-overlay" onClick={onCerrar}>
+    <div className="ads-modal" onClick={e => e.stopPropagation()}>
+      <div className="ads-modal-header">
+        <h2 className="ads-modal-title">{editando ? '✏️ Editar Tarea' : '➕ Nueva Tarea'}</h2>
+        <button className="ads-modal-close" onClick={onCerrar}>✕</button>
+      </div>
+      <form className="ads-form" onSubmit={onGuardar}>
+        <div className="ads-form-row ads-form-row--2">
+          <div className="ads-form-group">
+            <label className="ads-form-label">Proyecto *</label>
+            <select className="ads-select" required value={datos.proyecto_id} onChange={e => onChange({ ...datos, proyecto_id: e.target.value })}>
+              <option value="">— Seleccionar —</option>
+              {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre_proyecto}</option>)}
+            </select>
+          </div>
+          <div className="ads-form-group">
+            <label className="ads-form-label">Responsable *</label>
+            <select className="ads-select" required value={datos.empleado_id} onChange={e => onChange({ ...datos, empleado_id: e.target.value })}>
+              <option value="">— Seleccionar —</option>
+              {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="ads-form-group">
+          <label className="ads-form-label">Título *</label>
+          <input className="ads-input" placeholder="Título de la tarea" required
+            value={datos.titulo} onChange={e => onChange({ ...datos, titulo: e.target.value })} />
+        </div>
+        <div className="ads-form-group">
+          <label className="ads-form-label">Instrucciones</label>
+          <textarea className="ads-textarea" placeholder="Describe en detalle lo que debe hacerse..." rows={5}
+            value={datos.instrucciones} onChange={e => onChange({ ...datos, instrucciones: e.target.value })} />
+        </div>
+        <div className="ads-form-row ads-form-row--3">
+          <div className="ads-form-group">
+            <label className="ads-form-label">Prioridad</label>
+            <select className="ads-select" value={datos.prioridad} onChange={e => onChange({ ...datos, prioridad: e.target.value })}>
+              <option>Baja</option><option>Media</option><option>Alta</option><option>Urgente</option>
+            </select>
+          </div>
+          <div className="ads-form-group">
+            <label className="ads-form-label">Estado</label>
+            <select className="ads-select" value={datos.estado} onChange={e => onChange({ ...datos, estado: e.target.value })}>
+              <option>Pendiente</option><option>En Progreso</option><option>En Revisión</option><option>Completada</option>
+            </select>
+          </div>
+          <div className="ads-form-group">
+            <label className="ads-form-label">Fecha Fin</label>
+            <input className="ads-input" type="date"
+              value={datos.fecha_finalizacion || ''} onChange={e => onChange({ ...datos, fecha_finalizacion: e.target.value })} />
+          </div>
+        </div>
+        <div className="ads-form-actions">
+          <button type="submit" className="ads-btn ads-btn--primary" disabled={enviando}>
+            {enviando ? 'Guardando...' : editando ? 'Actualizar' : 'Crear Tarea'}
+          </button>
+          <button type="button" className="ads-btn ads-btn--secondary" onClick={onCerrar}>Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)
+
+// ── Vista principal ───────────────────────────────────────────────────────────
+const TareasView = ({ isAdmin }) => {
   const [tareas, setTareas] = useState([])
   const [proyectos, setProyectos] = useState([])
   const [usuarios, setUsuarios] = useState([])
   const [loading, setLoading] = useState(true)
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState(null)
+  const [filtroPrioridad, setFiltroPrioridad] = useState(null)
+  const [tareaDetalle, setTareaDetalle] = useState(null)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
   const [enviando, setEnviando] = useState(false)
-  const [tareaSeleccionada, setTareaSeleccionada] = useState(null) 
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroEstado, setFiltroEstado] = useState(null)
-  const [filtroPrioridad, setFiltroPrioridad] = useState(null);
 
-  const [nuevaTarea, setNuevaTarea] = useState({
-    proyecto_id: '',
-    empleado_id: '',
-    titulo: '',
-    instrucciones: '',
-    prioridad: 'Media',
-    estado: 'Pendiente'
+  const [formData, setFormData] = useState({
+    proyecto_id: '', empleado_id: '', titulo: '',
+    instrucciones: '', prioridad: 'Media', estado: 'Pendiente', fecha_finalizacion: ''
   })
 
-  // --- CARGA DE DATOS SINCRONIZADA ---
   const fetchData = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      // Usamos apiClient para inyectar automáticamente el Bearer Token
-      const [resT, resP, resU] = await Promise.all([
-        apiClient('/tareas'),
-        apiClient('/proyectos'),
-        apiClient('/usuarios')
-      ])
-
-      if (!resT.ok || !resP.ok || !resU.ok) throw new Error("Error al obtener datos protegidos")
-
-      setTareas(await resT.json())
-      setProyectos(await resP.json())
-      setUsuarios(await resU.json())
-    } catch (error) {
-      console.error("Fallo en la carga de TareasView:", error)
-    } finally {
-      setLoading(false)
-    }
+      const [rT, rP, rU] = await Promise.all([apiClient('/tareas'), apiClient('/proyectos'), apiClient('/usuarios')])
+      if (rT.ok) setTareas(await rT.json())
+      if (rP.ok) setProyectos(await rP.json())
+      if (rU.ok) setUsuarios(await rU.json())
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
   }
 
   useEffect(() => { fetchData() }, [])
 
-  // --- LÓGICA DE FILTRADO ---
+  const stats = {
+    total:      tareas.length,
+    pendiente:  tareas.filter(t => t.estado === 'Pendiente').length,
+    progreso:   tareas.filter(t => t.estado === 'En Progreso').length,
+    revision:   tareas.filter(t => t.estado === 'En Revisión').length,
+    completada: tareas.filter(t => t.estado === 'Completada').length,
+  }
+
+  const normalizar = t => t?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || ''
+
   const tareasFiltradas = tareas.filter(t => {
-    const term = busqueda.toLowerCase();
-    const cumpleTexto = (
-      t.titulo?.toLowerCase().includes(term) ||
+    const term = busqueda.toLowerCase()
+    const coincide = t.titulo?.toLowerCase().includes(term) ||
       t.proyectos?.nombre_proyecto?.toLowerCase().includes(term) ||
       t.perfiles?.nombre?.toLowerCase().includes(term) ||
       t.proyectos?.clientes?.empresa?.toLowerCase().includes(term)
-    );
-    
-    const normalizar = (texto) => 
-      texto?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || "";
+    const estado = filtroEstado ? normalizar(t.estado).includes(normalizar(filtroEstado)) : true
+    const prio = filtroPrioridad ? t.prioridad === filtroPrioridad : true
+    return coincide && estado && prio
+  })
 
-    const cumpleEstado = filtroEstado 
-      ? normalizar(t.estado).includes(normalizar(filtroEstado)) 
-      : true;
-
-    const cumplePrioridad = filtroPrioridad 
-      ? t.prioridad === filtroPrioridad 
-      : true;
-
-    return cumpleTexto && cumpleEstado && cumplePrioridad;
-  });
-
-  // --- ESTADÍSTICAS ---
-  const stats = {
-    total: tareas.length,
-    pendientes: tareas.filter(t => t.estado === 'Pendiente').length,
-    enProgreso: tareas.filter(t => t.estado === 'En Progreso').length,
-    completadas: tareas.filter(t => t.estado === 'Completada').length
-  }
-
-  // --- CRUD CON JWT ---
-  const handleGuardar = async (e) => {
-    e.preventDefault()
-    if (!nuevaTarea.proyecto_id || !nuevaTarea.titulo || !nuevaTarea.empleado_id) {
-      return alert("⚠️ Proyecto, Título y Responsable son obligatorios.")
+  const abrirForm = (t = null) => {
+    if (t) {
+      setFormData({ proyecto_id: t.proyecto_id, empleado_id: t.empleado_id, titulo: t.titulo, instrucciones: t.instrucciones || '', prioridad: t.prioridad, estado: t.estado, fecha_finalizacion: t.fecha_finalizacion || '' })
+      setEditandoId(t.id)
+    } else {
+      setFormData({ proyecto_id: '', empleado_id: '', titulo: '', instrucciones: '', prioridad: 'Media', estado: 'Pendiente', fecha_finalizacion: '' })
+      setEditandoId(null)
     }
-    if (enviando) return
-
-    const endpoint = editandoId ? `/tareas/${editandoId}` : '/tareas'
-    const metodo = editandoId ? 'PUT' : 'POST'
-
-    try {
-      setEnviando(true)
-      const response = await apiClient(endpoint, {
-        method: metodo,
-        body: JSON.stringify(nuevaTarea)
-      })
-
-      if (response.ok) {
-        alert(editandoId ? "Tarea actualizada" : "Tarea creada correctamente");
-        cerrarFormulario()
-        fetchData()
-      } else {
-        alert("❌ No se pudo guardar la tarea. Revisa los permisos.");
-      }
-    } catch (error) { 
-      console.error(error)
-    } finally {
-      setEnviando(false)
-    }
-  }
-
-  const handleEliminar = async (id) => {
-    if (window.confirm("¿Eliminar esta tarea definitivamente?")) {
-      try {
-        const response = await apiClient(`/tareas/${id}`, { method: 'DELETE' })
-        if (response.ok) fetchData()
-      } catch (error) { console.error(error) }
-    }
-  }
-
-  const prepararEdicion = (t) => {
-    setNuevaTarea({
-      proyecto_id: t.proyecto_id,
-      empleado_id: t.empleado_id,
-      titulo: t.titulo,
-      instrucciones: t.instrucciones,
-      prioridad: t.prioridad,
-      estado: t.estado
-    })
-    setEditandoId(t.id)
     setMostrarForm(true)
   }
 
-  const cerrarFormulario = () => {
-    setMostrarForm(false)
-    setEditandoId(null)
-    setNuevaTarea({ proyecto_id: '', empleado_id: '', titulo: '', instrucciones: '', prioridad: 'Media', estado: 'Pendiente' })
+  const cerrarForm = () => { setMostrarForm(false); setEditandoId(null) }
+
+  const handleGuardar = async (e) => {
+    e.preventDefault(); setEnviando(true)
+    try {
+      const endpoint = editandoId ? `/tareas/${editandoId}` : '/tareas'
+      const res = await apiClient(endpoint, { method: editandoId ? 'PUT' : 'POST', body: JSON.stringify(formData) })
+      if (res.ok) { cerrarForm(); fetchData() }
+    } catch (e) { console.error(e) }
+    finally { setEnviando(false) }
   }
 
-  const getStatStyle = (color, isActive) => ({
-    background: isActive ? '#2d3748' : '#1e293b',
-    padding: '12px 15px',
-    borderRadius: '10px',
-    borderLeft: `3px solid ${color}`,
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    transform: isActive ? 'scale(1.02)' : 'scale(1)',
-    boxShadow: isActive ? `0 0 10px ${color}44` : 'none',
-    border: isActive ? '1px solid #334155' : '1px solid transparent'
-  })
+  const handleEliminar = async (id) => {
+    if (!window.confirm('¿Eliminar esta tarea?')) return
+    const res = await apiClient(`/tareas/${id}`, { method: 'DELETE' })
+    if (res.ok) { setTareaDetalle(null); fetchData() }
+  }
 
-  // --- SUB-VISTA: DETALLE ---
-  const DetalleTarea = ({ tarea, alCerrar }) => (
-    <div className="animation-slide" style={{ background: '#1e293b', padding: '30px', borderRadius: '15px', border: '1px solid #334155' }}>
-      <button onClick={alCerrar} className="btn-secondary" style={{ marginBottom: '20px' }}>← Volver al listado</button>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
-        <div>
-          <span style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: '0.8rem' }}>
-            {tarea.proyectos?.clientes?.empresa?.toUpperCase()}
-          </span>
-          <h2 style={{ color: 'white', marginTop: '5px' }}>{tarea.titulo}</h2>
-          <p style={{ color: '#94a3b8', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{tarea.instrucciones || "Sin instrucciones detalladas."}</p>
-          <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-            <span className={`badge ${tarea.prioridad?.toLowerCase()}`}>{tarea.prioridad}</span>
-            <span className={`badge ${tarea.estado?.replace(/\s+/g, '-').toLowerCase()}`}>{tarea.estado}</span>
-          </div>
-        </div>
-        <div style={{ background: '#0f172a', borderRadius: '12px', padding: '20px', border: '1px dashed #334155' }}>
-          <h4 style={{ color: '#64748b', marginBottom: '15px' }}>Información de Seguimiento</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', color: '#cbd5e1', fontSize: '0.9rem' }}>
-            <p><strong>Proyecto:</strong> {tarea.proyectos?.nombre_proyecto}</p>
-            <p><strong>Responsable:</strong> {tarea.perfiles?.nombre}</p>
-            <div style={{ height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', borderRadius: '8px', marginTop: '10px' }}>
-                <span style={{ color: '#475569' }}>[ Gráfico de Avance ]</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  const handleActualizar = async (id, cambios) => {
+    const res = await apiClient(`/tareas/${id}`, { method: 'PUT', body: JSON.stringify(cambios) })
+    if (res.ok) {
+      setTareas(prev => prev.map(t => t.id === id ? { ...t, ...cambios } : t))
+      if (tareaDetalle?.id === id) setTareaDetalle(prev => ({ ...prev, ...cambios }))
+    }
+  }
 
   return (
-    <div className="dashboard-content">
-      {tareaSeleccionada ? (
-        <DetalleTarea tarea={tareaSeleccionada} alCerrar={() => setTareaSeleccionada(null)} />
-      ) : (
-        <>
-          {/* STATS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-            <div style={getStatStyle('#3b82f6', filtroEstado === null)} onClick={() => setFiltroEstado(null)}>
-              <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>TOTAL TAREAS</span>
-              <h2 style={{ margin: '0', color: 'white' }}>{stats.total}</h2>
-            </div>
-            <div style={getStatStyle('#f59e0b', filtroEstado === 'Pendiente')} onClick={() => setFiltroEstado('Pendiente')}>
-              <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>PENDIENTES</span>
-              <h2 style={{ margin: '0', color: '#f59e0b' }}>{stats.pendientes}</h2>
-            </div>
-            <div style={getStatStyle('#3b82f6', filtroEstado === 'En Progreso')} onClick={() => setFiltroEstado('En Progreso')}>
-              <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>EN PROGRESO</span>
-              <h2 style={{ margin: '0', color: '#3b82f6' }}>{stats.enProgreso}</h2>
-            </div>
-            <div style={getStatStyle('#10b981', filtroEstado === 'Completada')} onClick={() => setFiltroEstado('Completada')}>
-              <span style={{ color: '#94a3b8', fontSize: '0.7rem' }}>COMPLETADAS</span>
-              <h2 style={{ margin: '0', color: '#10b981' }}>{stats.completadas}</h2>
-            </div>
-          </div>
+    <div className="ads-root">
 
-          {/* FILTROS PRIORIDAD */}
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-            <span style={{ color: '#94a3b8', fontSize: '0.8rem', alignSelf: 'center' }}>Prioridad:</span>
-            {['Urgente', 'Alta', 'Media', 'Baja'].map(prio => (
-              <button
-                key={prio}
-                onClick={() => setFiltroPrioridad(filtroPrioridad === prio ? null : prio)}
-                className={`filter-chip ${filtroPrioridad === prio ? 'active' : ''}`}
-                style={{
-                  padding: '6px 12px', borderRadius: '20px', fontSize: '0.75rem', cursor: 'pointer',
-                  border: '1px solid #334155', transition: '0.2s',
-                  background: filtroPrioridad === prio ? '#3b82f6' : '#1e293b',
-                  color: filtroPrioridad === prio ? 'white' : '#94a3b8'
-                }}
-              >
-                {prio}
-              </button>
-            ))}
+      {/* Stats */}
+      <div className="ads-stats">
+        {[
+          { label: 'Total',       val: stats.total,     color: '#3b82f6', filtro: null },
+          { label: 'Pendiente',   val: stats.pendiente, color: '#64748b', filtro: 'Pendiente' },
+          { label: 'En Progreso', val: stats.progreso,  color: '#3b82f6', filtro: 'En Progreso' },
+          { label: 'En Revisión', val: stats.revision,  color: '#f59e0b', filtro: 'En Revisión' },
+          { label: 'Completadas', val: stats.completada,color: '#10b981', filtro: 'Completada' },
+        ].map(s => (
+          <div key={s.label}
+            className={`ads-stat-card ${filtroEstado === s.filtro ? 'ads-stat-card--active' : ''}`}
+            style={{ '--accent': s.color }}
+            onClick={() => setFiltroEstado(filtroEstado === s.filtro ? null : s.filtro)}
+          >
+            <span className="ads-stat-label">{s.label}</span>
+            <span className="ads-stat-val" style={{ color: s.color }}>{s.val}</span>
           </div>
+        ))}
+      </div>
 
-          <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
-            <input 
-              type="text" 
-              placeholder="🔍 Buscar por título, proyecto, cliente o responsable..." 
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={{ flex: 1, padding: '12px', borderRadius: '8px', background: '#1e293b', color: 'white', border: '1px solid #334155' }}
-            />
-            <button className="btn-save" onClick={() => setMostrarForm(!mostrarForm)}>
-              {mostrarForm ? 'Cerrar' : '+ Nueva Tarea'}
+      {/* Toolbar */}
+      <div className="ads-toolbar">
+        <input className="ads-search" placeholder="🔍  Buscar tarea, proyecto, cliente o responsable..."
+          value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+        <div className="ads-chips">
+          {[null, 'Urgente', 'Alta', 'Media', 'Baja'].map(p => (
+            <button key={p ?? 'todas'}
+              className={`ads-chip ${filtroPrioridad === p ? 'ads-chip--active' : ''}`}
+              onClick={() => setFiltroPrioridad(p)}
+            >
+              {p === null ? 'Todas' : `${PRIORIDAD_CFG[p].icon} ${p}`}
             </button>
-          </div>
+          ))}
+        </div>
+        {isAdmin && <button className="ads-btn ads-btn--primary" onClick={() => abrirForm()}>+ Nueva Tarea</button>}
+      </div>
 
-          {mostrarForm && (
-            <section className="form-section animation-slide" style={{ marginBottom: '25px', background: '#1e293b', padding: '20px', borderRadius: '12px', border: '1px solid #334155' }}>
-              <h3 style={{ color: 'white', marginBottom: '20px' }}>{editandoId ? '✏️ Editar Tarea' : '➕ Crear Tarea'}</h3>
-              <form onSubmit={handleGuardar} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '15px' }}>
-                  <select value={nuevaTarea.proyecto_id} onChange={e => setNuevaTarea({...nuevaTarea, proyecto_id: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
-                    <option value="">-- Proyecto --</option>
-                    {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre_proyecto}</option>)}
-                  </select>
-                  <select value={nuevaTarea.empleado_id} onChange={e => setNuevaTarea({...nuevaTarea, empleado_id: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
-                    <option value="">-- Responsable --</option>
-                    {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-                  </select>
-                  <input type="text" placeholder="Título de la tarea" value={nuevaTarea.titulo} onChange={e => setNuevaTarea({...nuevaTarea, titulo: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: '15px' }}>
-                  <textarea placeholder="Instrucciones..." value={nuevaTarea.instrucciones} onChange={e => setNuevaTarea({...nuevaTarea, instrucciones: e.target.value})} rows="6" style={{ padding: '12px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155', resize: 'none' }} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    <select value={nuevaTarea.prioridad} onChange={e => setNuevaTarea({...nuevaTarea, prioridad: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
-                      <option value="Baja">Baja</option><option value="Media">Media</option><option value="Alta">Alta</option><option value="Urgente">Urgente</option>
-                    </select>
-                    <select value={nuevaTarea.estado} onChange={e => setNuevaTarea({...nuevaTarea, estado: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: '#0f172a', color: 'white', border: '1px solid #334155' }}>
-                      <option value="Pendiente">Pendiente</option><option value="En Progreso">En Progreso</option><option value="Completada">Completada</option>
-                    </select>
+      {/* Grid */}
+      {loading ? (
+        <div className="ads-loading"><div className="ads-spinner" /><span>Cargando tareas...</span></div>
+      ) : tareasFiltradas.length === 0 ? (
+        <div className="ads-empty"><span className="ads-empty-icon">📋</span><p>No hay tareas que coincidan.</p></div>
+      ) : (
+        <div className="ads-grid">
+          {tareasFiltradas.map((t, i) => {
+            const pCfg = PRIORIDAD_CFG[t.prioridad] || PRIORIDAD_CFG['Baja']
+            const eCfg = ESTADO_CFG[t.estado] || ESTADO_CFG['Pendiente']
+            return (
+              <div key={t.id} className="ads-card" style={{ animationDelay: `${i * 0.03}s` }} onClick={() => setTareaDetalle(t)}>
+                {/* Top */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="ads-code">{t.codigo_serie}</span>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <span className="ads-badge" style={{ color: pCfg.color, background: pCfg.bg }}>{pCfg.icon} {t.prioridad}</span>
+                    {isAdmin && (
+                      <>
+                        <button className="ads-btn--icon" onClick={e => { e.stopPropagation(); abrirForm(t) }}>✏️</button>
+                        <button className="ads-btn--icon danger" onClick={e => { e.stopPropagation(); handleEliminar(t.id) }}>🗑️</button>
+                      </>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button type="submit" className="btn-save" disabled={enviando}>{enviando ? 'Guardando...' : editandoId ? 'Actualizar' : 'Crear'}</button>
-                  <button type="button" className="btn-secondary" onClick={cerrarFormulario}>Cancelar</button>
-                </div>
-              </form>
-            </section>
-          )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-            {loading ? <p>Cargando flujo de trabajo...</p> : tareasFiltradas.map(t => (
-              <div key={t.id} className="proyecto-card" onClick={() => setTareaSeleccionada(t)} style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', border: '1px solid #334155', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '0.7rem', color: '#3b82f6', fontWeight: 'bold' }}>🏢 {t.proyectos?.clientes?.empresa}</span>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={(e) => { e.stopPropagation(); prepararEdicion(t); }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>✏️</button>
-                    <button onClick={(e) => { e.stopPropagation(); handleEliminar(t.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button>
+                {/* Info */}
+                <div>
+                  <p style={{ color: 'var(--ads-blue)', fontSize: '11px', margin: '0 0 4px', fontFamily: 'var(--ads-mono)' }}>
+                    🏢 {t.proyectos?.clientes?.empresa} / {t.proyectos?.nombre_proyecto}
+                  </p>
+                  <h3 style={{ color: 'var(--ads-text)', fontWeight: 700, fontSize: '0.95rem', margin: 0, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.titulo}</h3>
+                </div>
+
+                {/* Responsable */}
+                {t.perfiles?.nombre && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="ads-avatar" style={{ width: 24, height: 24, fontSize: 10 }}>
+                      {t.perfiles.nombre.charAt(0)}
+                    </div>
+                    <span style={{ color: 'var(--ads-sub)', fontSize: '12.5px', fontFamily: 'var(--ads-mono)' }}>{t.perfiles.nombre}</span>
+                  </div>
+                )}
+
+                {/* Avance */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--ads-sub)', marginBottom: '5px', fontFamily: 'var(--ads-mono)' }}>
+                    <span>Avance</span><span>{t.avance || 0}%</span>
+                  </div>
+                  <div className="ads-progress-track">
+                    <div className="ads-progress-fill" style={{ width: `${t.avance || 0}%`, background: eCfg.dot }} />
                   </div>
                 </div>
-                <p style={{ margin: '0', fontSize: '0.65rem', color: '#94a3b8' }}>{t.proyectos?.nombre_proyecto}</p>
-                <h3 style={{ color: '#f8fafc', margin: '8px 0' }}>{t.titulo}</h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}>
-                  <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem' }}>{t.perfiles?.nombre?.charAt(0)}</div>
-                  <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>{t.perfiles?.nombre}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span className={`badge ${t.prioridad?.toLowerCase()}`}>{t.prioridad}</span>
-                  <span className={`badge ${t.estado?.replace(/\s+/g, '-').toLowerCase()}`}>{t.estado}</span>
+
+                {/* Footer */}
+                <div style={{ borderTop: '1px solid var(--ads-border)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="ads-badge" style={{ color: eCfg.color, background: eCfg.bg }}>
+                    <span className="ads-dot" style={{ background: eCfg.dot }} />{t.estado}
+                  </span>
+                  {t.fecha_finalizacion && (
+                    <span style={{ fontSize: '11px', color: 'var(--ads-muted)', fontFamily: 'var(--ads-mono)' }}>{formatFecha(t.fecha_finalizacion)}</span>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        </>
+            )
+          })}
+        </div>
+      )}
+
+      {tareaDetalle && (
+        <ModalTarea tarea={tareaDetalle} onCerrar={() => setTareaDetalle(null)} onEditar={abrirForm} onEliminar={handleEliminar} onActualizar={handleActualizar} />
+      )}
+
+      {mostrarForm && (
+        <ModalForm editando={!!editandoId} datos={formData} onChange={setFormData} onGuardar={handleGuardar} onCerrar={cerrarForm} enviando={enviando} proyectos={proyectos} usuarios={usuarios} />
       )}
     </div>
   )
