@@ -159,12 +159,26 @@ def crear_tarea():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ─────────────────────────────────────────────────────────────────
+# REEMPLAZAR el endpoint actualizar_tarea en app.py por este:
+# ─────────────────────────────────────────────────────────────────
+
 @app.route('/api/tareas/<id>', methods=['PUT'])
 @requiere_auth
 def actualizar_tarea(id):
     try:
         datos = request.json
-        response = supabase.table("tareas").update(datos).eq('id', id).execute()
+
+        # Si el estado cambia a "Completada", registrar la fecha automáticamente
+        if datos.get('estado') == 'Completada':
+            from datetime import datetime, timezone
+            datos['fecha_completada'] = datetime.now(timezone.utc).isoformat()
+
+        # Si el estado cambia a cualquier otra cosa, limpiar la fecha
+        elif 'estado' in datos and datos.get('estado') != 'Completada':
+            datos['fecha_completada'] = None
+
+        response = supabase.table('tareas').update(datos).eq('id', id).execute()
         return jsonify(response.data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -194,6 +208,61 @@ def get_mis_tareas():
         return jsonify(response.data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+
+@app.route('/api/tareas/<tarea_id>/extras', methods=['GET'])
+@requiere_auth
+def get_extras(tarea_id):
+    """Obtener comentarios y links de una tarea."""
+    try:
+        response = supabase.table('tarea_extras') \
+            .select('*, perfiles(nombre, avatar_url)') \
+            .eq('tarea_id', tarea_id) \
+            .order('creado_en', desc=True) \
+            .execute()
+        return jsonify(response.data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/tareas/<tarea_id>/extras', methods=['POST'])
+@requiere_auth
+def crear_extra(tarea_id):
+    try:
+        datos = request.json
+        datos['tarea_id']   = tarea_id
+        datos['usuario_id'] = request.user_id
+        print(">>> Datos a insertar:", datos)  # ← agregar esto
+        response = supabase.table('tarea_extras').insert(datos).execute()
+        return jsonify(response.data), 201
+    except Exception as e:
+        print(">>> ERROR crear_extra:", str(e))  # ← agregar esto
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/tareas/extras/<extra_id>', methods=['DELETE'])
+@requiere_auth
+def eliminar_extra(extra_id):
+    """Eliminar un comentario o link (solo el autor)."""
+    try:
+        
+        extra = supabase.table('tarea_extras') \
+            .select('usuario_id') \
+            .eq('id', extra_id) \
+            .single() \
+            .execute()
+
+        if not extra.data:
+            return jsonify({"error": "Extra no encontrado"}), 404
+
+        if extra.data['usuario_id'] != request.user_id:
+            return jsonify({"error": "No autorizado"}), 403
+
+        supabase.table('tarea_extras').delete().eq('id', extra_id).execute()
+        return jsonify({"message": "Eliminado correctamente"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # --- SECCIÓN DE USUARIOS ---
 
@@ -279,5 +348,5 @@ def get_perfil_usuario(id):
         return jsonify({"error": "Error interno del servidor", "details": str(e)}), 500
 
 if __name__ == '__main__':
-    # threaded=True permite manejar múltiples peticiones simultáneas, útil para el dashboard
+    
     app.run(debug=True, port=5000, threaded=True)

@@ -193,9 +193,59 @@
   animation: pulse 2s ease-in-out infinite;
 }
 
+/* Badge con número de mensajes no leídos */
+.adm-nav-badge--count {
+  width: auto;
+  height: 18px;
+  min-width: 18px;
+  border-radius: 9px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--adm-mono);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Indicador de chat activo — azul estático, sin animación */
+.adm-nav-badge--active-chat {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--adm-blue);
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: 0.6; transform: scale(0.85); }
+}
+
+/* Botón de alerta de mensajes en el topbar */
+.adm-msg-alert {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  color: #f87171;
+  font-family: var(--adm-font);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.adm-msg-alert:hover {
+  background: rgba(239,68,68,0.18);
+  border-color: rgba(239,68,68,0.4);
+  transform: translateY(-1px);
 }
 
 /* ── Logout ────────────────────────────────────────── */
@@ -361,10 +411,234 @@
   border-radius: 3px;
 }
 
-/* ── Chat wrapper ──────────────────────────────────── */
-.adm-chat-wrapper {
+/* ── Chat layout tipo messenger ────────────────────────────────── */
+.adm-chat-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
   height: calc(100vh - var(--adm-topbar-h) - 56px);
   min-height: 0;
+  gap: 0;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+/* Panel izquierdo — lista de conversaciones */
+.adm-chat-panel-left {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--adm-border);
+  min-height: 0;
+}
+
+.adm-chat-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--adm-border);
+  flex-shrink: 0;
+}
+
+.adm-chat-panel-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--adm-text);
+  font-family: var(--adm-font);
+}
+
+.adm-chat-panel-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ef4444;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: 20px;
+  padding: 2px 9px;
+  font-family: var(--adm-mono);
+}
+
+/* Lista de conversaciones */
+.adm-chatlist {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+.adm-chatlist-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--adm-border);
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.adm-chatlist-item:hover { background: var(--adm-surface2); }
+
+.adm-chatlist-item--active {
+  background: var(--adm-blue-dim);
+  border-left: 3px solid var(--adm-blue);
+}
+
+/* Avatar de conversación */
+.adm-chatlist-avatar {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  font-family: var(--adm-font);
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.adm-chatlist-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Badge de no leídos sobre el avatar */
+.adm-chatlist-noti {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--adm-mono);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border: 2px solid var(--adm-surface);
+}
+
+/* Info de conversación */
+.adm-chatlist-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.adm-chatlist-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.adm-chatlist-nombre {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--adm-text);
+  font-family: var(--adm-font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-chatlist-hora {
+  font-size: 11px;
+  color: var(--adm-sub);
+  font-family: var(--adm-mono);
+  flex-shrink: 0;
+}
+
+.adm-chatlist-preview {
+  font-size: 12px;
+  color: var(--adm-sub);
+  font-family: var(--adm-font);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-chatlist-preview--unread {
+  color: var(--adm-text);
+  font-weight: 600;
+}
+
+/* Estado vacío de la lista */
+.adm-chatlist-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px 20px;
+  color: var(--adm-sub);
+  font-size: 13px;
+  text-align: center;
+  font-family: var(--adm-font);
+}
+
+.adm-chatlist-empty p { margin: 0; }
+
+.adm-spinner-sm {
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255,255,255,0.08);
+  border-top-color: var(--adm-blue);
+  border-radius: 50%;
+  animation: adsSpin 0.8s linear infinite;
+}
+
+/* Panel derecho */
+.adm-chat-panel-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Placeholder cuando no hay chat seleccionado */
+.adm-chat-select-hint {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--adm-sub);
+  font-family: var(--adm-font);
+  font-size: 14px;
+}
+
+.adm-chat-select-hint p { margin: 0; }
+
+/* Responsive */
+@media (max-width: 700px) {
+  .adm-chat-layout {
+    grid-template-columns: 1fr;
+  }
+  .adm-chat-panel-left {
+    display: none;
+  }
 }
 
 /* Chat vacío */

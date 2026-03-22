@@ -35,7 +35,7 @@ SUPABASE_KEY=tu_service_role_key
 ## ▶️ Iniciar el servidor
 
 ```bash
-python app.py
+python main.py
 ```
 
 El servidor corre en `http://localhost:5000` con soporte para múltiples peticiones simultáneas (`threaded=True`).
@@ -99,7 +99,7 @@ El token es validado contra Supabase Auth en cada petición. Si el token es inv�
 
 ```
 Backend/
-├── app.py              # Aplicación Flask principal
+├── main.py              # Aplicación Flask principal
 ├── requirements.txt    # Dependencias Python
 └── .env                # Variables de entorno (no versionar)
 ```

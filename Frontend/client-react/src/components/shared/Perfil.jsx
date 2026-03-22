@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react'
-import { supabase }   from '../../supabaseClient'
-import { apiClient }  from '../../apiClient'
+import { supabase }  from '../../supabaseClient'
+import { apiClient } from '../../apiClient'
+import { useToast }  from './Toast'
 import './Perfil.css'
 
 const Perfil = ({ session, onAvatarUpdate }) => {
-  const [loading,      setLoading]      = useState(false)
-  const [avatarUrl,    setAvatarUrl]    = useState(null)
-  const [nombre,       setNombre]       = useState(session?.user?.user_metadata?.nombre || '')
-  const [biografia,    setBiografia]    = useState('')
-  const [newPassword,  setNewPassword]  = useState('')
-  const [confirmPass,  setConfirmPass]  = useState('')
-  const [guardado,     setGuardado]     = useState(false)
-  const [idVisual,     setIdVisual]     = useState(null)
+  const toast = useToast()
+
+  const [loading,     setLoading]     = useState(false)
+  const [avatarUrl,   setAvatarUrl]   = useState(null)
+  const [nombre,      setNombre]      = useState(session?.user?.user_metadata?.nombre || '')
+  const [biografia,   setBiografia]   = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPass, setConfirmPass] = useState('')
+  const [guardado,    setGuardado]    = useState(false)
+  const [idVisual,    setIdVisual]    = useState(null)
 
   const userId = session?.user?.id
 
@@ -24,9 +27,11 @@ const Perfil = ({ session, onAvatarUpdate }) => {
           setBiografia(data.biografia || '')
           setAvatarUrl(data.avatar_url || null)
           setIdVisual(data.id_visual ? String(data.id_visual) : null)
+        } else {
+          toast.error('No se pudo cargar el perfil')
         }
-      } catch (err) {
-        console.error('Error al cargar perfil:', err)
+      } catch {
+        toast.error('Error de conexión al cargar el perfil')
       }
     }
     if (userId) getPerfil()
@@ -34,10 +39,22 @@ const Perfil = ({ session, onAvatarUpdate }) => {
 
   const actualizarPerfil = async (e) => {
     e.preventDefault()
-    if (newPassword && newPassword !== confirmPass) {
-      alert('Las contraseñas no coinciden.')
+
+    if (!nombre.trim()) {
+      toast.warning('El nombre no puede estar vacío')
       return
     }
+
+    if (newPassword && newPassword !== confirmPass) {
+      toast.warning('Las contraseñas no coinciden')
+      return
+    }
+
+    if (newPassword && newPassword.length < 6) {
+      toast.warning('La contraseña debe tener al menos 6 caracteres')
+      return
+    }
+
     setLoading(true)
     try {
       await supabase.auth.updateUser({ data: { nombre } })
@@ -49,7 +66,6 @@ const Perfil = ({ session, onAvatarUpdate }) => {
       if (!res.ok) throw new Error('Error al guardar en el servidor')
 
       if (newPassword) {
-        if (newPassword.length < 6) throw new Error('La contraseña es muy corta (mínimo 6 caracteres)')
         const { error: passError } = await supabase.auth.updateUser({ password: newPassword })
         if (passError) throw passError
         setNewPassword('')
@@ -58,8 +74,9 @@ const Perfil = ({ session, onAvatarUpdate }) => {
 
       setGuardado(true)
       setTimeout(() => setGuardado(false), 3000)
+      toast.success('Perfil actualizado correctamente')
     } catch (err) {
-      alert('Error: ' + err.message)
+      toast.error('Error: ' + err.message)
     } finally {
       setLoading(false)
     }
@@ -90,8 +107,9 @@ const Perfil = ({ session, onAvatarUpdate }) => {
 
       setAvatarUrl(urlConCache)
       if (onAvatarUpdate) onAvatarUpdate(urlConCache)
+      toast.success('Foto de perfil actualizada')
     } catch (err) {
-      alert('Error al subir: ' + err.message)
+      toast.error('Error al subir la foto: ' + err.message)
     } finally {
       setLoading(false)
     }
@@ -102,32 +120,21 @@ const Perfil = ({ session, onAvatarUpdate }) => {
   return (
     <div className="prf-root">
 
-      {/* ── Columna izquierda: avatar + info básica ── */}
+      {/* ── Columna izquierda ── */}
       <div className="prf-left">
-
-        {/* Avatar */}
         <div className="prf-avatar-wrap">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="Avatar" className="prf-avatar-img" />
-          ) : (
-            <div className="prf-avatar-placeholder">{inicial}</div>
-          )}
+          {avatarUrl
+            ? <img src={avatarUrl} alt="Avatar" className="prf-avatar-img" />
+            : <div className="prf-avatar-placeholder">{inicial}</div>
+          }
           {loading && <div className="prf-avatar-loading"><div className="prf-spinner" /></div>}
         </div>
 
-        {/* Subir foto */}
         <label htmlFor="avatar-upload" className="prf-btn prf-btn--secondary prf-upload-btn">
           {loading ? 'Procesando...' : '📷 Cambiar foto'}
         </label>
-        <input
-          id="avatar-upload"
-          type="file"
-          accept="image/*"
-          onChange={subirFoto}
-          style={{ display: 'none' }}
-        />
+        <input id="avatar-upload" type="file" accept="image/*" onChange={subirFoto} style={{ display: 'none' }} />
 
-        {/* Info card */}
         <div className="prf-info-card">
           <div className="prf-info-row">
             <span className="prf-info-label">Email</span>
@@ -148,52 +155,28 @@ const Perfil = ({ session, onAvatarUpdate }) => {
         </div>
       </div>
 
-      {/* ── Columna derecha: formulario ── */}
+      {/* ── Columna derecha ── */}
       <div className="prf-right">
         <form className="prf-form" onSubmit={actualizarPerfil}>
 
-          {/* Sección: datos personales */}
           <div className="prf-section">
             <h3 className="prf-section-title">Datos personales</h3>
-
             <div className="prf-field">
               <label className="prf-label">Nombre completo</label>
-              <input
-                className="prf-input"
-                type="text"
-                placeholder="Tu nombre"
-                value={nombre}
-                onChange={e => setNombre(e.target.value)}
-              />
+              <input className="prf-input" type="text" placeholder="Tu nombre" value={nombre} onChange={e => setNombre(e.target.value)} />
             </div>
-
             <div className="prf-field">
               <label className="prf-label">Biografía</label>
-              <textarea
-                className="prf-textarea"
-                placeholder="Cuéntanos sobre ti, tus habilidades o rol en el equipo..."
-                value={biografia}
-                onChange={e => setBiografia(e.target.value)}
-                rows={4}
-              />
+              <textarea className="prf-textarea" placeholder="Cuéntanos sobre ti, tus habilidades o rol en el equipo..." value={biografia} onChange={e => setBiografia(e.target.value)} rows={4} />
             </div>
           </div>
 
-          {/* Sección: seguridad */}
           <div className="prf-section">
             <h3 className="prf-section-title">Seguridad</h3>
-
             <div className="prf-field">
               <label className="prf-label">Nueva contraseña <span className="prf-optional">(opcional)</span></label>
-              <input
-                className="prf-input"
-                type="password"
-                placeholder="Mínimo 6 caracteres"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-              />
+              <input className="prf-input" type="password" placeholder="Mínimo 6 caracteres" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
             </div>
-
             <div className="prf-field">
               <label className="prf-label">Confirmar contraseña</label>
               <input
@@ -209,16 +192,9 @@ const Perfil = ({ session, onAvatarUpdate }) => {
             </div>
           </div>
 
-          {/* Botón guardar */}
           <div className="prf-form-footer">
-            {guardado && (
-              <span className="prf-success-msg">✅ Cambios guardados correctamente</span>
-            )}
-            <button
-              type="submit"
-              className="prf-btn prf-btn--primary"
-              disabled={loading}
-            >
+            {guardado && <span className="prf-success-msg">✅ Cambios guardados correctamente</span>}
+            <button type="submit" className="prf-btn prf-btn--primary" disabled={loading}>
               {loading ? 'Guardando...' : 'Guardar cambios'}
             </button>
           </div>

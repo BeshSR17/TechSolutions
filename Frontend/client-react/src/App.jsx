@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import AdminDashboard from './components/Admin/AdminDashboard'
 import UsersDashboard from './components/users/UsersDashboard'
-import { ToastProvider } from './components/shared/Toast'
+import { ToastProvider, useToast } from './components/shared/Toast'
 import './App.css'
 
 const supabase = createClient(
@@ -12,13 +12,19 @@ const supabase = createClient(
 
 const LOGO_URL = "https://ycyncrhqawrtgjknstxd.supabase.co/storage/v1/object/public/config/logo.png"
 
-function App() {
-  const [session,          setSession]          = useState(null)
-  const [rol,              setRol]              = useState(null)
-  const [loading,          setLoading]          = useState(false)
-  const [view,             setView]             = useState('login') // 'login' | 'reset'
-  const [isRecoveryMode,   setIsRecoveryMode]   = useState(false)
-  const [authTab,          setAuthTab]          = useState('login') // 'login' | 'register'
+// ── Contenido separado para poder usar useToast() ────────────────────────────
+// useToast() solo puede usarse dentro de <ToastProvider>, por eso separamos
+// la lógica en un componente hijo que vive dentro del provider.
+
+function AppContent() {
+  const toast = useToast()
+
+  const [session,        setSession]        = useState(null)
+  const [rol,            setRol]            = useState(null)
+  const [loading,        setLoading]        = useState(false)
+  const [view,           setView]           = useState('login')
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false)
+  const [authTab,        setAuthTab]        = useState('login')
 
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
@@ -45,11 +51,22 @@ function App() {
     return () => subscription.unsubscribe()
   }, [])
 
+  // ── Handlers de autenticación ───────────────────────────────────────────────
+
   const handleLogin = async (e) => {
     e.preventDefault()
     setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) alert(error.message)
+    if (error) {
+      // Mensaje amigable según el tipo de error
+      if (error.message.includes('Invalid login credentials')) {
+        toast.error('Credenciales incorrectas. Verifica tu correo y contraseña.')
+      } else if (error.message.includes('Email not confirmed')) {
+        toast.warning('Debes confirmar tu correo antes de iniciar sesión.')
+      } else {
+        toast.error('Error al iniciar sesión: ' + error.message)
+      }
+    }
     setLoading(false)
   }
 
@@ -60,8 +77,16 @@ function App() {
       email, password,
       options: { data: { nombre } }
     })
-    if (error) alert(error.message)
-    else alert('¡Revisa tu correo para validar tu cuenta!')
+    if (error) {
+      if (error.message.includes('already registered')) {
+        toast.warning('Este correo ya está registrado. Intenta iniciar sesión.')
+      } else {
+        toast.error('Error al registrarse: ' + error.message)
+      }
+    } else {
+      toast.success('¡Cuenta creada! Revisa tu correo para validar tu cuenta.')
+      setAuthTab('login')
+    }
     setLoading(false)
   }
 
@@ -71,18 +96,28 @@ function App() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin,
     })
-    if (error) alert('Error: ' + error.message)
-    else { alert('Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.'); setView('login') }
+    if (error) {
+      toast.error('Error: ' + error.message)
+    } else {
+      toast.success('Si el correo está registrado, recibirás un enlace de restablecimiento.')
+      setView('login')
+    }
     setLoading(false)
   }
 
   const handleUpdatePassword = async (e) => {
     e.preventDefault()
+    if (password.length < 6) {
+      toast.warning('La contraseña debe tener al menos 6 caracteres.')
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const { error } = await supabase.auth.updateUser({ password })
-    if (error) alert('Error al actualizar: ' + error.message)
-    else {
-      alert('¡Contraseña actualizada! Ya puedes iniciar sesión.')
+    if (error) {
+      toast.error('Error al actualizar: ' + error.message)
+    } else {
+      toast.success('¡Contraseña actualizada! Ya puedes iniciar sesión.')
       setIsRecoveryMode(false)
       setView('login')
       await supabase.auth.signOut()
@@ -92,19 +127,19 @@ function App() {
 
   const handleLogout = () => supabase.auth.signOut()
 
-  // ── Dashboards ─────────────────────────────────────────────────────────────
+  // ── Dashboards ──────────────────────────────────────────────────────────────
   if (session && rol) {
     return rol === 'Administrador'
       ? <AdminDashboard session={session} handleLogout={handleLogout} logo={LOGO_URL} />
       : <UsersDashboard session={session} handleLogout={handleLogout} logo={LOGO_URL} />
   }
 
-  // ── Recovery mode ──────────────────────────────────────────────────────────
+  // ── Recovery mode ───────────────────────────────────────────────────────────
   if (isRecoveryMode) {
     return (
       <div className="auth-scene">
         <div className="auth-bg-grid" />
-        <div className="auth-glow auth-glow--top"    />
+        <div className="auth-glow auth-glow--top" />
         <div className="auth-glow auth-glow--bottom" />
 
         <div className="auth-card auth-card--narrow">
@@ -127,12 +162,12 @@ function App() {
     )
   }
 
-  // ── Reset password ─────────────────────────────────────────────────────────
+  // ── Reset password ──────────────────────────────────────────────────────────
   if (view === 'reset') {
     return (
       <div className="auth-scene">
         <div className="auth-bg-grid" />
-        <div className="auth-glow auth-glow--top"    />
+        <div className="auth-glow auth-glow--top" />
         <div className="auth-glow auth-glow--bottom" />
 
         <div className="auth-card auth-card--narrow">
@@ -158,36 +193,25 @@ function App() {
     )
   }
 
-  // ── Login / Register ───────────────────────────────────────────────────────
+  // ── Login / Register ────────────────────────────────────────────────────────
   return (
-    <ToastProvider>
     <div className="auth-scene">
-      {/* Fondo decorativo */}
       <div className="auth-bg-grid" />
-      <div className="auth-glow auth-glow--top"    />
+      <div className="auth-glow auth-glow--top" />
       <div className="auth-glow auth-glow--bottom" />
 
       <div className="auth-card">
-        {/* Logo */}
         <img src={LOGO_URL} alt="TechSolutions" className="auth-logo" />
 
-        {/* Tabs login / registro */}
         <div className="auth-tabs">
-          <button
-            className={`auth-tab ${authTab === 'login' ? 'auth-tab--active' : ''}`}
-            onClick={() => setAuthTab('login')}
-          >
+          <button className={`auth-tab ${authTab === 'login' ? 'auth-tab--active' : ''}`} onClick={() => setAuthTab('login')}>
             Iniciar sesión
           </button>
-          <button
-            className={`auth-tab ${authTab === 'register' ? 'auth-tab--active' : ''}`}
-            onClick={() => setAuthTab('register')}
-          >
+          <button className={`auth-tab ${authTab === 'register' ? 'auth-tab--active' : ''}`} onClick={() => setAuthTab('register')}>
             Registrarse
           </button>
         </div>
 
-        {/* ── Tab: Login ── */}
         {authTab === 'login' && (
           <form className="auth-form" onSubmit={handleLogin}>
             <div className="auth-field">
@@ -200,22 +224,15 @@ function App() {
               <input className="auth-input" type="password" placeholder="••••••••" required
                 value={password} onChange={e => setPassword(e.target.value)} />
             </div>
-
             <button type="submit" className="auth-btn auth-btn--primary" disabled={loading}>
               {loading ? <span className="auth-spinner" /> : 'Iniciar sesión'}
             </button>
-
-            <button
-              type="button"
-              className="auth-link"
-              onClick={() => setView('reset')}
-            >
+            <button type="button" className="auth-link" onClick={() => setView('reset')}>
               ¿Olvidaste tu contraseña?
             </button>
           </form>
         )}
 
-        {/* ── Tab: Registro ── */}
         {authTab === 'register' && (
           <form className="auth-form" onSubmit={handleSignUp}>
             <div className="auth-field">
@@ -233,7 +250,6 @@ function App() {
               <input className="auth-input" type="password" placeholder="Mínimo 6 caracteres" required
                 value={password} onChange={e => setPassword(e.target.value)} />
             </div>
-
             <button type="submit" className="auth-btn auth-btn--primary" disabled={loading}>
               {loading ? <span className="auth-spinner" /> : 'Crear cuenta'}
             </button>
@@ -241,7 +257,15 @@ function App() {
         )}
       </div>
     </div>
-  </ToastProvider>
+  )
+}
+
+// ── App raíz — solo provee el ToastProvider global ───────────────────────────
+function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   )
 }
 
