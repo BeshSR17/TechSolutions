@@ -4,7 +4,7 @@ import ClientesView  from './ClientesView'
 import ProyectosView from './ProyectosView'
 import TareasView    from './TareasView'
 import UsuariosView  from './UsuariosView'
-import Perfil        from '../shared/perfil'
+import Perfil        from '../shared/Perfil'
 import Chat          from '../shared/Chat'
 import { supabase }  from '../../supabaseClient'
 

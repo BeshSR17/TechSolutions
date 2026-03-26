@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './UsersDashboard.css'
-import Perfil     from '../shared/perfil'
+import Perfil     from '../shared/Perfil'
 import Chat       from '../shared/Chat'
 import TareasView from './TareasView'
 import { ToastProvider } from '../shared/Toast'
