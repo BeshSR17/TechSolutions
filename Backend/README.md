@@ -122,5 +122,5 @@ python-dotenv
 1. Conecta tu repositorio en [render.com](https://render.com)
 2. Tipo de servicio: **Web Service**
 3. Comando de build: `pip install -r requirements.txt`
-4. Comando de inicio: `python app.py`
+4. Comando de inicio: `python main.py`
 5. Agrega las variables de entorno `SUPABASE_URL` y `SUPABASE_KEY` en el dashboard de Render
