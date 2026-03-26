@@ -15,7 +15,7 @@ url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
 
-# --- MIDDLEWARE DE AUTENTICACIÓN JWT ---
+# --- MIDDLEWARE: cualquier usuario autenticado ---
 def requiere_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -33,14 +33,44 @@ def requiere_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+# --- MIDDLEWARE: solo administradores ---
+def requiere_admin(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "No autorizado"}), 401
+        try:
+            token = auth_header.split(" ")[1]
+            user_response = supabase.auth.get_user(token)
+            if not user_response or not user_response.user:
+                return jsonify({"error": "Sesión inválida"}), 401
+
+            request.user_id = user_response.user.id
+
+            # Verificar rol en la tabla perfiles
+            perfil = supabase.table('perfiles') \
+                .select('rol') \
+                .eq('id', request.user_id) \
+                .single() \
+                .execute()
+
+            if not perfil.data or perfil.data['rol'] != 'Administrador':
+                return jsonify({"error": "Acceso denegado — se requiere rol Administrador"}), 403
+
+        except Exception as e:
+            return jsonify({"error": "Token inválido", "details": str(e)}), 401
+        return f(*args, **kwargs)
+    return decorated
+
 @app.route('/')
 def home():
     return {"status": "API TechSolutions operando con Seguridad JWT"}
 
-# --- CLIENTES ---
+# --- CLIENTES (solo admin) ---
 
 @app.route('/api/clientes', methods=['GET'])
-@requiere_auth
+@requiere_admin
 def get_clientes():
     try:
         response = supabase.table('clientes').select("*, proyectos(*)").execute()
@@ -49,7 +79,7 @@ def get_clientes():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clientes', methods=['POST'])
-@requiere_auth
+@requiere_admin
 def crear_cliente():
     try:
         datos = request.json
@@ -59,7 +89,7 @@ def crear_cliente():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clientes/<id>', methods=['PUT'])
-@requiere_auth
+@requiere_admin
 def actualizar_cliente(id):
     try:
         datos_actualizados = request.json
@@ -69,7 +99,7 @@ def actualizar_cliente(id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/clientes/<id>', methods=['DELETE'])
-@requiere_auth
+@requiere_admin
 def eliminar_cliente(id):
     try:
         supabase.table('clientes').delete().eq('id', id).execute()
@@ -77,10 +107,10 @@ def eliminar_cliente(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- PROYECTOS ---
+# --- PROYECTOS (solo admin) ---
 
 @app.route('/api/proyectos', methods=['GET'])
-@requiere_auth
+@requiere_admin
 def get_proyectos():
     try:
         response = supabase.table("proyectos").select("*, clientes(nombre_contacto, empresa)").execute()
@@ -89,7 +119,7 @@ def get_proyectos():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/proyectos', methods=['POST'])
-@requiere_auth
+@requiere_admin
 def crear_proyecto():
     try:
         datos = request.json
@@ -99,7 +129,7 @@ def crear_proyecto():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/proyectos/<id>', methods=['PUT'])
-@requiere_auth
+@requiere_admin
 def actualizar_proyecto(id):
     try:
         datos = request.json
@@ -109,7 +139,7 @@ def actualizar_proyecto(id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/proyectos/<id>', methods=['DELETE'])
-@requiere_auth
+@requiere_admin
 def eliminar_proyecto(id):
     try:
         supabase.table("proyectos").delete().eq('id', id).execute()
@@ -118,7 +148,7 @@ def eliminar_proyecto(id):
         return jsonify({"error": str(e)}), 500
 
 # --- TAREAS ---
-# ⚠️ IMPORTANTE: rutas específicas ANTES que rutas con parámetros <id>
+# ⚠️ rutas específicas ANTES que rutas con parámetros <id>
 
 @app.route('/api/tareas/mis-tareas', methods=['GET'])
 @requiere_auth
@@ -152,7 +182,7 @@ def eliminar_extra(extra_id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/tareas', methods=['GET'])
-@requiere_auth
+@requiere_admin
 def get_todas_las_tareas():
     try:
         response = supabase.table("tareas") \
@@ -163,7 +193,7 @@ def get_todas_las_tareas():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/tareas', methods=['POST'])
-@requiere_auth
+@requiere_admin
 def crear_tarea():
     try:
         datos = request.json
@@ -187,7 +217,7 @@ def actualizar_tarea(id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/tareas/<id>', methods=['DELETE'])
-@requiere_auth
+@requiere_admin
 def eliminar_tarea(id):
     try:
         supabase.table('tareas').delete().eq('id', id).execute()
@@ -196,7 +226,7 @@ def eliminar_tarea(id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/tareas/proyecto/<id>', methods=['GET'])
-@requiere_auth
+@requiere_admin
 def get_tareas_por_proyecto(id):
     try:
         response = supabase.table("tareas") \
@@ -235,7 +265,7 @@ def crear_extra(tarea_id):
 # --- USUARIOS ---
 
 @app.route('/api/usuarios', methods=['GET'])
-@requiere_auth
+@requiere_admin
 def get_usuarios():
     try:
         response = supabase.table("perfiles") \
@@ -249,7 +279,7 @@ def get_usuarios():
 # --- PERFILES ---
 
 @app.route('/api/perfiles', methods=['GET'])
-@requiere_auth
+@requiere_admin
 def get_todos_los_perfiles():
     try:
         response = supabase.table("perfiles").select("*").execute()
@@ -258,7 +288,7 @@ def get_todos_los_perfiles():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/perfiles', methods=['POST'])
-@requiere_auth
+@requiere_admin
 def crear_perfil():
     try:
         datos = request.json
@@ -299,7 +329,7 @@ def actualizar_perfil(id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/perfiles/<id>', methods=['DELETE'])
-@requiere_auth
+@requiere_admin
 def eliminar_perfil(id):
     try:
         supabase.table("perfiles").delete().eq('id', id).execute()
