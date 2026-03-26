@@ -81,20 +81,16 @@ const ChatList = ({ adminId, onSeleccionar, usuarioActual, refrescarKey }) => {
   useEffect(() => { cargar() }, [refrescarKey])
 
   useEffect(() => {
-  cargar()
-  const canal = supabase
-    .channel('chatlist-updates')
-    .on('postgres_changes', {
-      event: 'INSERT', schema: 'public', table: 'mensajes',
-      filter: `destinatario_id=eq.${adminId}`,
-    }, () => cargar())
-    .on('postgres_changes', {
-      event: 'UPDATE', schema: 'public', table: 'mensajes',  // ← agregar esto
-      filter: `destinatario_id=eq.${adminId}`,
-    }, () => cargar())
-    .subscribe()
-  return () => supabase.removeChannel(canal)
-}, [adminId])
+    cargar()
+    const canal = supabase
+      .channel('chatlist-updates')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'mensajes',
+        filter: `destinatario_id=eq.${adminId}`,
+      }, () => cargar())
+      .subscribe()
+    return () => supabase.removeChannel(canal)
+  }, [adminId])
 
   const formatHora = (fecha) => {
     const d = new Date(fecha)
@@ -174,6 +170,18 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
 
   const adminId = session.user.id
 
+  // ── Marcar inactivo al cerrar pestaña (también aplica al admin si tiene perfil)
+  useEffect(() => {
+    if (!adminId) return
+    const handleUnload = () => {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/perfiles?id=eq.${adminId}`
+      const data = JSON.stringify({ estado: 'Inactivo' })
+      navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }))
+    }
+    window.addEventListener('beforeunload', handleUnload)
+    return () => window.removeEventListener('beforeunload', handleUnload)
+  }, [adminId])
+
   // ── Avatar ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchAvatar = async () => {
@@ -213,31 +221,26 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
   }, [adminId])
 
   // ── Marcar como leídos al abrir el chat con un usuario específico ──────────
-const marcarLeidosDe = async (usuarioId) => {
-  // Esperar que el UPDATE termine completamente
-  const { error } = await supabase
-    .from('mensajes')
-    .update({ leido: true })
-    .eq('destinatario_id', adminId)
-    .eq('remitente_id', usuarioId)
-    .eq('leido', false)
-    .select() // ← esto fuerza a que espere la respuesta real
+  const marcarLeidosDe = async (usuarioId) => {
+    await supabase
+      .from('mensajes')
+      .update({ leido: true })
+      .eq('destinatario_id', adminId)
+      .eq('remitente_id', usuarioId)
+      .eq('leido', false)
 
-  if (!error) {
-    // Solo después del UPDATE exitoso, recalcular y recargar
     const { count } = await supabase
       .from('mensajes')
       .select('id', { count: 'exact', head: true })
       .eq('destinatario_id', adminId)
       .eq('leido', false)
-
     setMensajesNoLeidos(count || 0)
+
+    // Forzar recarga del ChatList para que desaparezca el badge
     setRefrescarKey(k => k + 1)
   }
-}
+
   const seleccionarChat = (usuario) => {
-    console.log('Seleccionando chat con:', usuario)
-  console.log('adminId:', adminId)
     setChatConUsuario(usuario)
     marcarLeidosDe(usuario.id)
   }

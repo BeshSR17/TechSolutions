@@ -35,17 +35,34 @@ function AppContent() {
     if (data) setRol(data.rol)
   }
 
+  // ── Marcar usuario como Activo/Inactivo ──────────────────────────────────
+  const marcarActivo = async (userID) => {
+    await supabase.from('perfiles').update({ estado: 'Activo' }).eq('id', userID)
+  }
+
+  const marcarInactivo = async (userID) => {
+    await supabase.from('perfiles').update({ estado: 'Inactivo' }).eq('id', userID)
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
-      if (session) fetchRol(session.user.id)
+      if (session) {
+        fetchRol(session.user.id)
+        marcarActivo(session.user.id)
+      }
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session)
       if (event === 'PASSWORD_RECOVERY') setIsRecoveryMode(true)
-      if (session) fetchRol(session.user.id)
-      else setRol(null)
+      if (event === 'SIGNED_IN' && session) {
+        fetchRol(session.user.id)
+        marcarActivo(session.user.id)
+      }
+      if (event === 'SIGNED_OUT') {
+        setRol(null)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -125,7 +142,13 @@ function AppContent() {
     setLoading(false)
   }
 
-  const handleLogout = () => supabase.auth.signOut()
+  const handleLogout = async () => {
+    const { data: { session: currentSession } } = await supabase.auth.getSession()
+    if (currentSession?.user?.id) {
+      await marcarInactivo(currentSession.user.id)
+    }
+    await supabase.auth.signOut()
+  }
 
   // ── Dashboards ──────────────────────────────────────────────────────────────
   if (session && rol) {

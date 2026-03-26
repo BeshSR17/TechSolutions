@@ -26,6 +26,19 @@ const UserDashboard = ({ session, handleLogout, logo }) => {
 
   const userId = session?.user?.id
 
+  // ── Marcar inactivo al cerrar pestaña/ventana ─────────────────────────────
+  useEffect(() => {
+    if (!userId) return
+    const handleUnload = () => {
+      // navigator.sendBeacon es la única forma confiable de hacer requests al cerrar
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/perfiles?id=eq.${userId}`
+      const data = JSON.stringify({ estado: 'Inactivo' })
+      navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }))
+    }
+    window.addEventListener('beforeunload', handleUnload)
+    return () => window.removeEventListener('beforeunload', handleUnload)
+  }, [userId])
+
   useEffect(() => {
     const fetchAvatar = async () => {
       try {

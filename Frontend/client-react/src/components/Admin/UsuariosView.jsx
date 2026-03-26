@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { apiClient } from '../../apiClient'
 import { useToast } from '../shared/Toast'
 import { validar, esValido, REGLAS } from '../../hooks/useValidation'
+import { supabase } from '../../supabaseClient'
 import '../admin-design-system.css'
 
 const ESQUEMA_USUARIO = {
@@ -49,6 +50,23 @@ const UsuariosView = ({ onChatClick }) => {
 
   const formVacio = { id_visual: '', nombre: '', email: '', rol: 'Usuario', biografia: '', avatar_url: '', estado: 'Activo' }
   const [formData, setFormData] = useState(formVacio)
+
+  // ── Realtime: actualizar estado de usuarios en tiempo real ────────────────
+  useEffect(() => {
+    const canal = supabase
+      .channel('perfiles-estado')
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'perfiles',
+      }, (payload) => {
+        // Actualizar solo el estado del usuario que cambió
+        setUsuarios(prev => prev.map(u =>
+          u.id === payload.new.id ? { ...u, estado: payload.new.estado } : u
+        ))
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(canal)
+  }, [])
 
   const fetchData = async () => {
     try {
@@ -184,8 +202,16 @@ const UsuariosView = ({ onChatClick }) => {
                     {onChatClick && <button className="ads-btn--icon" title={`Chat con ${u.nombre}`} onClick={e => { e.stopPropagation(); onChatClick(u) }} style={{ color: '#3b82f6', borderColor: 'rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.08)' }}>💬</button>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  <span className="ads-badge" style={{ color: eCfg.color, background: eCfg.bg }}><span className="ads-dot" style={{ background: eCfg.dot }} />{u.estado || 'Sin estado'}</span>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {/* Estado = indicador de presencia en tiempo real */}
+                  <span className="ads-badge" style={{ color: eCfg.color, background: eCfg.bg }}>
+                    <span className="ads-dot" style={{
+                      background: eCfg.dot,
+                      boxShadow: u.estado === 'Activo' ? `0 0 6px ${eCfg.dot}` : 'none',
+                      animation: u.estado === 'Activo' ? 'pulse 2s ease-in-out infinite' : 'none',
+                    }} />
+                    {u.estado === 'Activo' ? 'En línea' : 'Desconectado'}
+                  </span>
                   <span className="ads-badge" style={{ color: rCfg.color, background: rCfg.bg }}>{u.rol || 'Usuario'}</span>
                   {u.id_visual && <span style={{ fontFamily: 'var(--ads-mono)', fontSize: '11px', color: 'var(--ads-muted)', alignSelf: 'center' }}>#{u.id_visual}</span>}
                 </div>
@@ -207,9 +233,16 @@ const UsuariosView = ({ onChatClick }) => {
               <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                 <Avatar url={usuarioDetalle.avatar_url} nombre={usuarioDetalle.nombre} size={60} fontSize={22} />
                 <div>
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {usuarioDetalle.id_visual && <span style={{ fontFamily: 'var(--ads-mono)', fontSize: '11px', color: 'var(--ads-sub)' }}>#{usuarioDetalle.id_visual}</span>}
-                    <span className="ads-badge" style={{ color: estadoColor(usuarioDetalle.estado).color, background: estadoColor(usuarioDetalle.estado).bg }}><span className="ads-dot" style={{ background: estadoColor(usuarioDetalle.estado).dot }} />{usuarioDetalle.estado || '—'}</span>
+                    <span className="ads-badge" style={{ color: estadoColor(usuarioDetalle.estado).color, background: estadoColor(usuarioDetalle.estado).bg }}>
+                      <span className="ads-dot" style={{
+                        background: estadoColor(usuarioDetalle.estado).dot,
+                        boxShadow: usuarioDetalle.estado === 'Activo' ? `0 0 6px ${estadoColor(usuarioDetalle.estado).dot}` : 'none',
+                        animation: usuarioDetalle.estado === 'Activo' ? 'pulse 2s ease-in-out infinite' : 'none',
+                      }} />
+                      {usuarioDetalle.estado === 'Activo' ? 'En línea ahora' : 'Desconectado'}
+                    </span>
                     <span className="ads-badge" style={{ color: rolColor(usuarioDetalle.rol).color, background: rolColor(usuarioDetalle.rol).bg }}>{usuarioDetalle.rol || 'Usuario'}</span>
                   </div>
                   <h2 className="ads-modal-title">{usuarioDetalle.nombre}</h2>
