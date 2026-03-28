@@ -1,5 +1,4 @@
 // hooks/useValidation.js
-// Hook reutilizable de validaciones para formularios
 
 const REGLAS = {
   requerido: (val) =>
@@ -69,7 +68,7 @@ export function validar(datos, esquema) {
       const error = regla(valor)
       if (error) {
         errores[campo] = error
-        break // Solo el primer error por campo
+        break 
       }
     }
   }

@@ -35,7 +35,7 @@ export function useChat(otroUsuarioId) {
 
     cargarMensajes()
 
-    // Suscripción Realtime — escucha mensajes entrantes
+    // -----------Realtime —-------------------
     const canal = supabase
       .channel(`chat-${[miId, otroUsuarioId].sort().join('-')}`)
       .on('postgres_changes', {
@@ -64,10 +64,8 @@ export function useChat(otroUsuarioId) {
       creado_en: new Date().toISOString()
     }
 
-    // Optimistic update — se muestra de inmediato
     setMensajes(prev => [...prev, nuevoMensaje])
 
-    // Guardar en Supabase
     await supabase.from('mensajes').insert(nuevoMensaje)
   }
 

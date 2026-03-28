@@ -10,7 +10,6 @@ export default function Chat({ otroUsuarioId, nombreOtro, rolOtro = 'Usuario', a
   const [miAvatar, setMiAvatar] = useState(null)
   const bottomRef = useRef(null)
 
-  // Obtener avatar del usuario actual para mostrar en sus propios mensajes (opcional, futuro)
   useEffect(() => {
     if (!miId) return
     supabase
@@ -50,7 +49,7 @@ export default function Chat({ otroUsuarioId, nombreOtro, rolOtro = 'Usuario', a
   const susMensajes = totalMensajes - misMensajes
   const hoy = new Date().toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })
 
-  // Componente reutilizable para avatar con fallback a inicial
+
   const Avatar = ({ url, nombre, size = 40, fontSize = 15 }) => (
     <div
       className="chat-avatar"
@@ -75,7 +74,7 @@ export default function Chat({ otroUsuarioId, nombreOtro, rolOtro = 'Usuario', a
           src={url}
           alt={nombre}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          onError={e => { e.target.style.display = 'none' }} // fallback si la URL falla
+          onError={e => { e.target.style.display = 'none' }} 
         />
       ) : (
         nombre?.charAt(0).toUpperCase() || '?'

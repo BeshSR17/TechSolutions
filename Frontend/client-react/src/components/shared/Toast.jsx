@@ -7,7 +7,7 @@ import './Toast.css'
 // ── Contexto global ───────────────────────────────────────────────────────────
 const ToastContext = createContext(null)
 
-// ── Proveedor (va en App.jsx envolviendo todo) ────────────────────────────────
+// ── Proveedor  ────────────────────────────────
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
 
@@ -42,16 +42,7 @@ export function ToastProvider({ children }) {
   )
 }
 
-// ── Hook para usar en cualquier componente ────────────────────────────────────
-/**
- * Uso:
- *   const toast = useToast()
- *
- *   toast.success('Cliente guardado correctamente')
- *   toast.error('No se pudo conectar con el servidor')
- *   toast.warning('Completa todos los campos requeridos')
- *   toast.info('Los cambios se guardarán automáticamente')
- */
+
 export function useToast() {
   const ctx = useContext(ToastContext)
   if (!ctx) throw new Error('useToast debe usarse dentro de <ToastProvider>')

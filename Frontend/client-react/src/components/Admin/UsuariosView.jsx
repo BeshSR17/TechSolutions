@@ -1,3 +1,4 @@
+// components/admin/UsuariosView.jsx
 import React, { useState, useEffect } from 'react'
 import { apiClient } from '../../apiClient'
 import { useToast } from '../shared/Toast'
@@ -5,20 +6,23 @@ import { validar, esValido, REGLAS } from '../../hooks/useValidation'
 import { supabase } from '../../supabaseClient'
 import '../admin-design-system.css'
 
+// ── Configs ───────────────────────────────────────────────────────────────────
 const ESQUEMA_USUARIO = {
-  nombre: [REGLAS.requerido, REGLAS.minLength(3)],
+  nombre: [REGLAS.requerido, REGLAS.minLength(2), REGLAS.maxLength(80)],
   email:  [REGLAS.requerido, REGLAS.email],
 }
+
+const ESTADOS_ACTIVOS = ['Pendiente', 'En Progreso', 'En Revisión']
 
 const estadoColor = (estado) => {
   if (estado === 'Activo')   return { color: '#10b981', bg: 'rgba(16,185,129,0.12)', dot: '#10b981' }
   if (estado === 'Inactivo') return { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',  dot: '#ef4444' }
-  return                            { color: '#64748b', bg: 'rgba(100,116,139,0.12)',dot: '#94a3b8' }
+  return                            { color: '#64748b', bg: 'rgba(100,116,139,0.12)', dot: '#94a3b8' }
 }
 
 const rolColor = (rol) => {
-  if (rol === 'Admin') return { color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' }
-  return                     { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' }
+  if (rol === 'Admin' || rol === 'Administrador') return { color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' }
+  return { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' }
 }
 
 const Avatar = ({ url, nombre, size = 42, fontSize = 16 }) => {
@@ -37,6 +41,7 @@ const UsuariosView = ({ onChatClick }) => {
   const toast = useToast()
 
   const [usuarios,       setUsuarios]       = useState([])
+  const [todasTareas,    setTodasTareas]    = useState([])
   const [tareasUsuario,  setTareasUsuario]  = useState([])
   const [loading,        setLoading]        = useState(true)
   const [busqueda,       setBusqueda]       = useState('')
@@ -48,77 +53,95 @@ const UsuariosView = ({ onChatClick }) => {
   const [enviando,       setEnviando]       = useState(false)
   const [errores,        setErrores]        = useState({})
 
-  const formVacio = { id_visual: '', nombre: '', email: '', rol: 'Usuario', biografia: '', avatar_url: '', estado: 'Activo' }
+  const formVacio = { id_visual: '', nombre: '', email: '', rol: 'Usuario', biografia: '', avatar_url: '', estado: 'Activo', rol_original: 'Usuario' }
   const [formData, setFormData] = useState(formVacio)
 
-  // ── Realtime: actualizar estado de usuarios en tiempo real ────────────────
+  // ── Realtime ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const canal = supabase
       .channel('perfiles-estado')
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'perfiles',
-      }, (payload) => {
-        // Actualizar solo el estado del usuario que cambió
-        setUsuarios(prev => prev.map(u =>
-          u.id === payload.new.id ? { ...u, estado: payload.new.estado } : u
-        ))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'perfiles' }, (payload) => {
+        setUsuarios(prev => prev.map(u => u.id === payload.new.id ? { ...u, ...payload.new } : u))
+        setUsuarioDetalle(cur => cur?.id === payload.new.id ? { ...cur, ...payload.new } : cur)
       })
       .subscribe()
-
     return () => supabase.removeChannel(canal)
   }, [])
 
+  // ── Carga de datos ────────────────────────────────────────────────────────
   const fetchData = async () => {
     try {
       setLoading(true)
-      const res = await apiClient('/perfiles')
-      if (res.ok) setUsuarios(await res.json())
+      const [resPerfiles, resTareas] = await Promise.all([
+        apiClient('/perfiles'),
+        apiClient('/tareas'),
+      ])
+      if (resPerfiles.ok) setUsuarios(await resPerfiles.json())
       else toast.error('No se pudieron cargar los colaboradores')
+      if (resTareas.ok) setTodasTareas(await resTareas.json())
     } catch {
-      toast.error('Error de conexión al cargar colaboradores')
+      toast.error('Error de conexión al cargar datos')
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchTareas = async (userId) => {
-    try {
-      const res = await apiClient('/tareas')
-      if (res.ok) {
-        const todas = await res.json()
-        setTareasUsuario(todas.filter(t => t.empleado_id === userId))
-      }
-    } catch { console.error('Error cargando tareas') }
+  const fetchTareasUsuario = async (userId) => {
+    setTareasUsuario(todasTareas.filter(t => t.empleado_id === userId))
   }
 
   useEffect(() => { fetchData() }, [])
 
+  // ── Tareas activas de un usuario ──────────────────────────────────────────
+  const tareasActivasDeUsuario = (userId) =>
+    todasTareas.filter(t => t.empleado_id === userId && ESTADOS_ACTIVOS.includes(t.estado)).length
+
+  // ── Detección de intento de promoción bloqueado ───────────────────────────
+  const intentaPromoverAAdmin =
+    !!editandoId &&
+    formData.rol_original === 'Usuario' &&
+    (formData.rol === 'Administrador' || formData.rol === 'Admin')
+
+  const tareasActivasActuales = editandoId ? tareasActivasDeUsuario(editandoId) : 0
+  const bloqueado = intentaPromoverAAdmin && tareasActivasActuales > 0
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = {
     total:    usuarios.length,
     activos:  usuarios.filter(u => u.estado === 'Activo').length,
     inactivos:usuarios.filter(u => u.estado === 'Inactivo').length,
-    admins:   usuarios.filter(u => u.rol === 'Admin').length,
+    admins:   usuarios.filter(u => u.rol === 'Admin' || u.rol === 'Administrador').length,
   }
 
   const usuariosFiltrados = usuarios.filter(u => {
-    const term = busqueda.toLowerCase()
-    const nombre   = u.nombre    ? u.nombre.toLowerCase()            : ''
-    const email    = u.email     ? u.email.toLowerCase()             : ''
-    const idVisual = u.id_visual ? String(u.id_visual).toLowerCase() : ''
-    const coincideBusqueda = nombre.includes(term) || email.includes(term) || idVisual.includes(term)
+    const term      = busqueda.toLowerCase()
+    const nombre    = u.nombre    ? u.nombre.toLowerCase()            : ''
+    const email     = u.email     ? u.email.toLowerCase()             : ''
+    const idVisual  = u.id_visual ? String(u.id_visual).toLowerCase() : ''
+    const coincide  = nombre.includes(term) || email.includes(term) || idVisual.includes(term)
     let coincideFiltro = true
-    if (filtroEstado === '__admins__') coincideFiltro = u.rol === 'Admin'
-    else if (filtroEstado !== null)   coincideFiltro = u.estado === filtroEstado
-    return coincideBusqueda && coincideFiltro
+    if (filtroEstado === '__admins__')  coincideFiltro = u.rol === 'Admin' || u.rol === 'Administrador'
+    else if (filtroEstado !== null)     coincideFiltro = u.estado === filtroEstado
+    return coincide && coincideFiltro
   })
 
-  const abrirDetalle = (u) => { setUsuarioDetalle(u); setTabDetalle('tareas'); fetchTareas(u.id) }
+  const abrirDetalle = (u) => {
+    setUsuarioDetalle(u)
+    setTabDetalle('tareas')
+    fetchTareasUsuario(u.id)
+  }
+
   const cerrarDetalle = () => { setUsuarioDetalle(null); setTareasUsuario([]) }
 
   const abrirForm = (u = null) => {
     setErrores({})
     if (u) {
-      setFormData({ id_visual: u.id_visual || '', nombre: u.nombre || '', email: u.email || '', rol: u.rol || 'Usuario', biografia: u.biografia || '', avatar_url: u.avatar_url || '', estado: u.estado || 'Activo' })
+      setFormData({
+        id_visual: u.id_visual || '', nombre: u.nombre || '', email: u.email || '',
+        rol: u.rol || 'Usuario', biografia: u.biografia || '',
+        avatar_url: u.avatar_url || '', estado: u.estado || 'Activo',
+        rol_original: u.rol || 'Usuario',  // para detectar si hubo cambio
+      })
       setEditandoId(u.id)
     } else {
       setFormData(formVacio)
@@ -135,14 +158,22 @@ const UsuariosView = ({ onChatClick }) => {
 
   const handleGuardar = async (e) => {
     e.preventDefault()
+
     const erroresNuevos = validar(formData, ESQUEMA_USUARIO)
     setErrores(erroresNuevos)
     if (!esValido(erroresNuevos)) { toast.warning('Corrige los errores antes de continuar'); return }
+
+    if (bloqueado) {
+      toast.error(`No se puede promover: hay ${tareasActivasActuales} tarea${tareasActivasActuales !== 1 ? 's' : ''} activa${tareasActivasActuales !== 1 ? 's' : ''}`)
+      return
+    }
+
     setEnviando(true)
     try {
+      const { rol_original, ...datosSinMeta } = formData
       const endpoint = editandoId ? `/perfiles/${editandoId}` : '/perfiles'
       const method   = editandoId ? 'PUT' : 'POST'
-      const res = await apiClient(endpoint, { method, body: JSON.stringify(formData) })
+      const res = await apiClient(endpoint, { method, body: JSON.stringify(datosSinMeta) })
       if (res.ok) {
         toast.success(editandoId ? 'Colaborador actualizado correctamente' : 'Colaborador creado correctamente')
         cerrarForm(); fetchData()
@@ -164,7 +195,11 @@ const UsuariosView = ({ onChatClick }) => {
           { label: 'Inactivos', val: stats.inactivos, color: '#ef4444', filtro: 'Inactivo' },
           { label: 'Admins',    val: stats.admins,    color: '#8b5cf6', filtro: '__admins__' },
         ].map(s => (
-          <div key={s.label} className={`ads-stat-card ${filtroEstado === s.filtro ? 'ads-stat-card--active' : ''}`} style={{ '--accent': s.color }} onClick={() => setFiltroEstado(filtroEstado === s.filtro ? null : s.filtro)}>
+          <div key={s.label}
+            className={`ads-stat-card ${filtroEstado === s.filtro ? 'ads-stat-card--active' : ''}`}
+            style={{ '--accent': s.color }}
+            onClick={() => setFiltroEstado(filtroEstado === s.filtro ? null : s.filtro)}
+          >
             <span className="ads-stat-label">{s.label}</span>
             <span className="ads-stat-val" style={{ color: s.color }}>{s.val}</span>
           </div>
@@ -185,8 +220,9 @@ const UsuariosView = ({ onChatClick }) => {
       ) : (
         <div className="ads-grid">
           {usuariosFiltrados.map((u, i) => {
-            const eCfg = estadoColor(u.estado)
-            const rCfg = rolColor(u.rol)
+            const eCfg   = estadoColor(u.estado)
+            const rCfg   = rolColor(u.rol)
+            const activas = tareasActivasDeUsuario(u.id)
             return (
               <div key={u.id} className="ads-card" style={{ animationDelay: `${i * 0.04}s` }} onClick={() => abrirDetalle(u)}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -199,11 +235,17 @@ const UsuariosView = ({ onChatClick }) => {
                   </div>
                   <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
                     <button className="ads-btn--icon" title="Editar" onClick={e => { e.stopPropagation(); abrirForm(u) }}>✏️</button>
-                    {onChatClick && <button className="ads-btn--icon" title={`Chat con ${u.nombre}`} onClick={e => { e.stopPropagation(); onChatClick(u) }} style={{ color: '#3b82f6', borderColor: 'rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.08)' }}>💬</button>}
+                    {onChatClick && (
+                      <button className="ads-btn--icon" title={`Chat con ${u.nombre}`}
+                        onClick={e => { e.stopPropagation(); onChatClick(u) }}
+                        style={{ color: '#3b82f6', borderColor: 'rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.08)' }}>
+                        💬
+                      </button>
+                    )}
                   </div>
                 </div>
+
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  {/* Estado = indicador de presencia en tiempo real */}
                   <span className="ads-badge" style={{ color: eCfg.color, background: eCfg.bg }}>
                     <span className="ads-dot" style={{
                       background: eCfg.dot,
@@ -214,8 +256,24 @@ const UsuariosView = ({ onChatClick }) => {
                   </span>
                   <span className="ads-badge" style={{ color: rCfg.color, background: rCfg.bg }}>{u.rol || 'Usuario'}</span>
                   {u.id_visual && <span style={{ fontFamily: 'var(--ads-mono)', fontSize: '11px', color: 'var(--ads-muted)', alignSelf: 'center' }}>#{u.id_visual}</span>}
+                  {/* Indicador de tareas activas en la card */}
+                  {activas > 0 && u.rol === 'Usuario' && (
+                    <span style={{
+                      fontSize: '11px', fontWeight: 700, padding: '3px 8px',
+                      borderRadius: '6px', fontFamily: 'var(--ads-mono)',
+                      background: 'rgba(245,158,11,0.12)', color: '#f59e0b',
+                      border: '1px solid rgba(245,158,11,0.25)',
+                    }}>
+                      {activas} tarea{activas !== 1 ? 's' : ''} activa{activas !== 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
-                {u.biografia && <p style={{ color: 'var(--ads-sub)', fontSize: '12.5px', margin: 0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{u.biografia}</p>}
+
+                {u.biografia && (
+                  <p style={{ color: 'var(--ads-sub)', fontSize: '12.5px', margin: 0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {u.biografia}
+                  </p>
+                )}
                 <div style={{ borderTop: '1px solid var(--ads-border)', paddingTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
                   <span style={{ color: 'var(--ads-blue)', fontSize: '12px' }}>Ver perfil →</span>
                 </div>
@@ -236,14 +294,18 @@ const UsuariosView = ({ onChatClick }) => {
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {usuarioDetalle.id_visual && <span style={{ fontFamily: 'var(--ads-mono)', fontSize: '11px', color: 'var(--ads-sub)' }}>#{usuarioDetalle.id_visual}</span>}
                     <span className="ads-badge" style={{ color: estadoColor(usuarioDetalle.estado).color, background: estadoColor(usuarioDetalle.estado).bg }}>
-                      <span className="ads-dot" style={{
-                        background: estadoColor(usuarioDetalle.estado).dot,
-                        boxShadow: usuarioDetalle.estado === 'Activo' ? `0 0 6px ${estadoColor(usuarioDetalle.estado).dot}` : 'none',
-                        animation: usuarioDetalle.estado === 'Activo' ? 'pulse 2s ease-in-out infinite' : 'none',
-                      }} />
+                      <span className="ads-dot" style={{ background: estadoColor(usuarioDetalle.estado).dot, boxShadow: usuarioDetalle.estado === 'Activo' ? `0 0 6px ${estadoColor(usuarioDetalle.estado).dot}` : 'none' }} />
                       {usuarioDetalle.estado === 'Activo' ? 'En línea ahora' : 'Desconectado'}
                     </span>
-                    <span className="ads-badge" style={{ color: rolColor(usuarioDetalle.rol).color, background: rolColor(usuarioDetalle.rol).bg }}>{usuarioDetalle.rol || 'Usuario'}</span>
+                    <span className="ads-badge" style={{ color: rolColor(usuarioDetalle.rol).color, background: rolColor(usuarioDetalle.rol).bg }}>
+                      {usuarioDetalle.rol || 'Usuario'}
+                    </span>
+                    {/* Aviso de tareas activas en el modal detalle */}
+                    {tareasActivasDeUsuario(usuarioDetalle.id) > 0 && usuarioDetalle.rol === 'Usuario' && (
+                      <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px', fontFamily: 'var(--ads-mono)', background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}>
+                        {tareasActivasDeUsuario(usuarioDetalle.id)} tarea{tareasActivasDeUsuario(usuarioDetalle.id) !== 1 ? 's' : ''} activa{tareasActivasDeUsuario(usuarioDetalle.id) !== 1 ? 's' : ''} — no se puede promover
+                      </span>
+                    )}
                   </div>
                   <h2 className="ads-modal-title">{usuarioDetalle.nombre}</h2>
                   <p style={{ color: 'var(--ads-sub)', fontSize: '13px', margin: '3px 0 0', fontFamily: 'var(--ads-mono)' }}>{usuarioDetalle.email}</p>
@@ -275,8 +337,8 @@ const UsuariosView = ({ onChatClick }) => {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {tareasUsuario.map(t => {
-                      const TAREA_ESTADOS = { 'Pendiente': { color: '#64748b', bg: 'rgba(100,116,139,0.12)', dot: '#94a3b8' }, 'En Progreso': { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', dot: '#3b82f6' }, 'En Revisión': { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', dot: '#f59e0b' }, 'Completada': { color: '#10b981', bg: 'rgba(16,185,129,0.12)', dot: '#10b981' } }
-                      const tCfg = TAREA_ESTADOS[t.estado] || TAREA_ESTADOS['Pendiente']
+                      const TAREA_DOT = { 'Pendiente': '#94a3b8', 'En Progreso': '#3b82f6', 'En Revisión': '#f59e0b', 'Completada': '#10b981' }
+                      const dot = TAREA_DOT[t.estado] || '#94a3b8'
                       return (
                         <div key={t.id} style={{ background: 'var(--ads-surface2)', border: '1px solid var(--ads-border)', borderRadius: '10px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -285,10 +347,12 @@ const UsuariosView = ({ onChatClick }) => {
                           </div>
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
                             <div style={{ width: '56px' }}>
-                              <div className="ads-progress-track"><div className="ads-progress-fill" style={{ width: `${t.avance || 0}%`, background: tCfg.dot }} /></div>
+                              <div className="ads-progress-track"><div className="ads-progress-fill" style={{ width: `${t.avance || 0}%`, background: dot }} /></div>
                               <p style={{ color: 'var(--ads-sub)', fontSize: '10px', margin: '2px 0 0', textAlign: 'right', fontFamily: 'var(--ads-mono)' }}>{t.avance || 0}%</p>
                             </div>
-                            <span className="ads-badge" style={{ color: tCfg.color, background: tCfg.bg }}><span className="ads-dot" style={{ background: tCfg.dot }} />{t.estado}</span>
+                            <span className="ads-badge" style={{ color: dot, background: `${dot}20` }}>
+                              <span className="ads-dot" style={{ background: dot }} />{t.estado}
+                            </span>
                           </div>
                         </div>
                       )
@@ -326,6 +390,7 @@ const UsuariosView = ({ onChatClick }) => {
               <h2 className="ads-modal-title">{editandoId ? '✏️ Editar Colaborador' : '👤 Nuevo Colaborador'}</h2>
               <button className="ads-modal-close" onClick={cerrarForm}>✕</button>
             </div>
+
             <form className="ads-form" onSubmit={handleGuardar}>
               <div className="ads-form-row ads-form-row--3">
                 <div className="ads-form-group">
@@ -333,42 +398,94 @@ const UsuariosView = ({ onChatClick }) => {
                   <input className="ads-input" placeholder="EMP-01" value={formData.id_visual} onChange={e => setFormData({ ...formData, id_visual: e.target.value })} />
                 </div>
                 <div className="ads-form-group">
-                  <label className="ads-form-label">Nombre *</label>
+                  <label className="ads-form-label">Nombre <span style={{ color: '#ef4444' }}>*</span></label>
                   <input className={`ads-input ${errores.nombre ? 'ads-input--error' : ''}`} placeholder="Nombre completo" value={formData.nombre}
                     onChange={e => { setFormData({ ...formData, nombre: e.target.value }); limpiarError('nombre') }} />
                   {errores.nombre && <span className="ads-error-msg">{errores.nombre}</span>}
                 </div>
                 <div className="ads-form-group">
-                  <label className="ads-form-label">Email *</label>
+                  <label className="ads-form-label">Email <span style={{ color: '#ef4444' }}>*</span></label>
                   <input className={`ads-input ${errores.email ? 'ads-input--error' : ''}`} type="text" placeholder="correo@empresa.com" value={formData.email}
                     onChange={e => { setFormData({ ...formData, email: e.target.value }); limpiarError('email') }} />
                   {errores.email && <span className="ads-error-msg">{errores.email}</span>}
                 </div>
               </div>
+
               <div className="ads-form-group">
                 <label className="ads-form-label">Biografía</label>
                 <textarea className="ads-textarea" placeholder="Habilidades, notas..." rows={4} value={formData.biografia} onChange={e => setFormData({ ...formData, biografia: e.target.value })} />
               </div>
+
               <div className="ads-form-row ads-form-row--3">
+                {/* ── Selector de Rol con bloqueo ── */}
                 <div className="ads-form-group">
                   <label className="ads-form-label">Rol</label>
                   <select className="ads-select" value={formData.rol} onChange={e => setFormData({ ...formData, rol: e.target.value })}>
-                    <option value="Usuario">Empleado</option><option value="Admin">Admin</option>
+                    <option value="Usuario">Empleado</option>
+                    <option value="Administrador">Administrador</option>
                   </select>
+
+                  {/* Advertencia de bloqueo */}
+                  {bloqueado && (
+                    <div style={{
+                      marginTop: '10px', padding: '12px 14px', borderRadius: '10px',
+                      background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                      display: 'flex', gap: '10px', alignItems: 'flex-start',
+                    }}>
+                      <span style={{ fontSize: '16px', flexShrink: 0 }}>⚠️</span>
+                      <div>
+                        <p style={{ color: '#ef4444', fontWeight: 700, fontSize: '13px', margin: '0 0 4px' }}>
+                          No se puede promover a Administrador
+                        </p>
+                        <p style={{ color: '#fca5a5', fontSize: '12px', margin: 0, lineHeight: '1.5' }}>
+                          Este colaborador tiene <strong>{tareasActivasActuales}</strong> tarea{tareasActivasActuales !== 1 ? 's' : ''} activa{tareasActivasActuales !== 1 ? 's' : ''} asignada{tareasActivasActuales !== 1 ? 's' : ''}.
+                          Reasigna o completa las tareas antes de cambiar el rol.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Aviso positivo: sin tareas, promoción OK */}
+                  {intentaPromoverAAdmin && !bloqueado && (
+                    <div style={{
+                      marginTop: '10px', padding: '10px 14px', borderRadius: '10px',
+                      background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
+                    }}>
+                      <p style={{ color: '#93c5fd', fontSize: '12px', margin: 0 }}>
+                        ℹ️ Este colaborador no tiene tareas activas. La promoción puede realizarse.
+                      </p>
+                    </div>
+                  )}
                 </div>
+
                 <div className="ads-form-group">
                   <label className="ads-form-label">Estado</label>
                   <select className="ads-select" value={formData.estado} onChange={e => setFormData({ ...formData, estado: e.target.value })}>
-                    <option value="Activo">Activo</option><option value="Inactivo">Inactivo</option>
+                    <option value="Activo">Activo</option>
+                    <option value="Inactivo">Inactivo</option>
                   </select>
                 </div>
+
                 <div className="ads-form-group">
                   <label className="ads-form-label">URL Avatar</label>
                   <input className="ads-input" placeholder="https://..." value={formData.avatar_url} onChange={e => setFormData({ ...formData, avatar_url: e.target.value })} />
                 </div>
               </div>
+
               <div className="ads-form-actions">
-                <button type="submit" className="ads-btn ads-btn--primary" disabled={enviando}>{enviando ? 'Guardando...' : editandoId ? 'Actualizar' : 'Crear Colaborador'}</button>
+                <button
+                  type="submit"
+                  className="ads-btn ads-btn--primary"
+                  disabled={enviando || bloqueado}
+                  style={bloqueado ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                >
+                  {enviando ? 'Guardando...' : editandoId ? 'Actualizar' : 'Crear Colaborador'}
+                </button>
+                {bloqueado && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', alignSelf: 'center', fontFamily: 'var(--ads-mono)' }}>
+                    Resuelve las tareas activas para habilitar
+                  </span>
+                )}
                 <button type="button" className="ads-btn ads-btn--secondary" onClick={cerrarForm}>Cancelar</button>
               </div>
             </form>

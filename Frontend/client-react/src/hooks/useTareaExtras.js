@@ -1,5 +1,4 @@
 // hooks/useTareaExtras.js
-// Reemplaza el localStorage de comentarios y links por llamadas reales a la API
 
 import { useState, useEffect } from 'react'
 import { apiClient } from '../apiClient'

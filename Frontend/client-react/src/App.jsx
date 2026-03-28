@@ -12,9 +12,6 @@ const supabase = createClient(
 
 const LOGO_URL = "https://ycyncrhqawrtgjknstxd.supabase.co/storage/v1/object/public/config/logo.png"
 
-// ── Contenido separado para poder usar useToast() ────────────────────────────
-// useToast() solo puede usarse dentro de <ToastProvider>, por eso separamos
-// la lógica en un componente hijo que vive dentro del provider.
 
 function AppContent() {
   const toast = useToast()

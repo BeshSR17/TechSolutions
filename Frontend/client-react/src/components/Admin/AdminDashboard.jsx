@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { id: 'perfil',    icon: '⚙️', label: 'Perfil'    },
 ]
 
-// ── Componente: lista de conversaciones tipo messenger ────────────────────────
+// ── Componente: lista de conversaciones ────────────────────────
 const ChatList = ({ adminId, onSeleccionar, usuarioActual, refrescarKey }) => {
   const [conversaciones, setConversaciones] = useState([])
   const [cargando, setCargando] = useState(true)
@@ -77,7 +77,6 @@ const ChatList = ({ adminId, onSeleccionar, usuarioActual, refrescarKey }) => {
     }
   }
 
-  // Recargar cuando cambia refrescarKey (admin seleccionó una conversación)
   useEffect(() => { cargar() }, [refrescarKey])
 
   useEffect(() => {
@@ -170,7 +169,6 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
 
   const adminId = session.user.id
 
-  // ── Marcar inactivo al cerrar pestaña (también aplica al admin si tiene perfil)
   useEffect(() => {
     if (!adminId) return
     const handleUnload = () => {
@@ -191,7 +189,6 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
     fetchAvatar()
   }, [adminId])
 
-  // ── Contar no leídos reales al cargar (mensajes llegados ANTES de esta sesión)
   useEffect(() => {
     const contarNoLeidos = async () => {
       const { count } = await supabase
@@ -220,7 +217,6 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
     return () => supabase.removeChannel(canal)
   }, [adminId])
 
-  // ── Marcar como leídos al abrir el chat con un usuario específico ──────────
   const marcarLeidosDe = async (usuarioId) => {
     await supabase
       .from('mensajes')
@@ -236,7 +232,6 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
       .eq('leido', false)
     setMensajesNoLeidos(count || 0)
 
-    // Forzar recarga del ChatList para que desaparezca el badge
     setRefrescarKey(k => k + 1)
   }
 

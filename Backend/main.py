@@ -15,7 +15,7 @@ url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
 
-# --- MIDDLEWARE: cualquier usuario autenticado ---
+# --- MIDDLEWARE: usuario autenticado ---
 def requiere_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -33,7 +33,7 @@ def requiere_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# --- MIDDLEWARE: solo administradores ---
+# --- MIDDLEWARE: administradores ---
 def requiere_admin(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -48,7 +48,6 @@ def requiere_admin(f):
 
             request.user_id = user_response.user.id
 
-            # Verificar rol en la tabla perfiles
             perfil = supabase.table('perfiles') \
                 .select('rol') \
                 .eq('id', request.user_id) \
@@ -67,7 +66,7 @@ def requiere_admin(f):
 def home():
     return {"status": "API TechSolutions operando con Seguridad JWT"}
 
-# --- CLIENTES (solo admin) ---
+# --- CLIENTES (admin) ---
 
 @app.route('/api/clientes', methods=['GET'])
 @requiere_admin
@@ -107,7 +106,7 @@ def eliminar_cliente(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- PROYECTOS (solo admin) ---
+# --- PROYECTOS (admin) ---
 
 @app.route('/api/proyectos', methods=['GET'])
 @requiere_admin
@@ -148,7 +147,6 @@ def eliminar_proyecto(id):
         return jsonify({"error": str(e)}), 500
 
 # --- TAREAS ---
-# ⚠️ rutas específicas ANTES que rutas con parámetros <id>
 
 @app.route('/api/tareas/mis-tareas', methods=['GET'])
 @requiere_auth

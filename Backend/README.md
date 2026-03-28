@@ -28,9 +28,6 @@ SUPABASE_URL=https://xxxx.supabase.co
 SUPABASE_KEY=tu_service_role_key
 ```
 
-> ⚠️ Usa la **service role key** (no la anon key). Esta key tiene permisos completos y nunca debe exponerse en el frontend.
-
----
 
 ## ▶️ Iniciar el servidor
 
@@ -113,14 +110,7 @@ flask
 flask-cors
 supabase
 python-dotenv
+gunicorn
 ```
 
 ---
-
-## 🌐 Despliegue en Render
-
-1. Conecta tu repositorio en [render.com](https://render.com)
-2. Tipo de servicio: **Web Service**
-3. Comando de build: `pip install -r requirements.txt`
-4. Comando de inicio: `python main.py`
-5. Agrega las variables de entorno `SUPABASE_URL` y `SUPABASE_KEY` en el dashboard de Render
