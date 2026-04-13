@@ -20,8 +20,8 @@ app = Flask(__name__)
 
 # --- CORS: solo orígenes permitidos ---
 ALLOWED_ORIGINS = [
-    "https://tech-solutions-rust.vercel.app",  # producción web
-    "http://localhost:5173",                    # desarrollo local web (Vite)
+    "https://tech-solutions-rust.vercel.app",
+    "http://localhost:5173",                    
 ]
 CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
 
@@ -37,11 +37,9 @@ CAMPOS_PERFIL = {"nombre", "biografia", "avatar_url"}
 CAMPOS_EXTRA = {"tipo", "contenido"}
 
 def filtrar_campos(datos: dict, campos_permitidos: set) -> dict:
-    """Retorna solo los campos de la whitelist, ignorando el resto."""
     return {k: v for k, v in datos.items() if k in campos_permitidos}
 
 def validar_requeridos(datos: dict, requeridos: list) -> str | None:
-    """Retorna mensaje de error si falta algún campo requerido, None si todo ok."""
     for campo in requeridos:
         if not datos.get(campo) or not str(datos[campo]).strip():
             return f"Campo requerido faltante o vacío: {campo}"
@@ -459,7 +457,6 @@ def eliminar_perfil(id):
         logger.error(f"eliminar_perfil {id}: {e}")
         return jsonify({"error": "Error interno del servidor"}), 500
 
-# --- PRODUCCIÓN: usar Gunicorn, no este bloque ---
-# Comando para Render: gunicorn app:app --workers 2
+
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

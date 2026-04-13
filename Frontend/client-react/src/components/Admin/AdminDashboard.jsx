@@ -5,7 +5,7 @@ import ProyectosView from './ProyectosView'
 import TareasView    from './TareasView'
 import UsuariosView  from './UsuariosView'
 import Perfil        from '../shared/Perfil'
-import Chat          from '../shared/Chat'
+import ChatPage      from '../shared/ChatPage'   // ← reemplaza Chat
 import { supabase }  from '../../supabaseClient'
 
 const NAV_ITEMS = [
@@ -17,237 +17,83 @@ const NAV_ITEMS = [
   { id: 'perfil',    icon: '⚙️', label: 'Perfil'    },
 ]
 
-// ── Componente: lista de conversaciones ────────────────────────
-const ChatList = ({ adminId, onSeleccionar, usuarioActual, refrescarKey }) => {
-  const [conversaciones, setConversaciones] = useState([])
-  const [cargando, setCargando] = useState(true)
-
-  const cargar = async () => {
-    try {
-      const { data } = await supabase
-        .from('mensajes')
-        .select('*, remitente:perfiles!remitente_id(id, nombre, avatar_url)')
-        .or(`destinatario_id.eq.${adminId},remitente_id.eq.${adminId}`)
-        .order('creado_en', { ascending: false })
-
-      if (!data) return
-
-      const mapa = {}
-      data.forEach(msg => {
-        const otroId = msg.remitente_id === adminId ? msg.destinatario_id : msg.remitente_id
-        const otroPerfil = msg.remitente_id !== adminId ? msg.remitente : null
-
-        if (!mapa[otroId]) {
-          mapa[otroId] = {
-            usuarioId:     otroId,
-            nombre:        otroPerfil?.nombre || 'Usuario',
-            avatar_url:    otroPerfil?.avatar_url || null,
-            ultimoMensaje: msg.contenido,
-            ultimaFecha:   msg.creado_en,
-            noLeidos:      0,
-          }
-        }
-
-        if (msg.remitente_id !== adminId && !msg.leido) {
-          mapa[otroId].noLeidos++
-        }
-      })
-
-      const sinPerfil = Object.values(mapa).filter(c => c.nombre === 'Usuario')
-      if (sinPerfil.length > 0) {
-        const ids = sinPerfil.map(c => c.usuarioId)
-        const { data: perfiles } = await supabase
-          .from('perfiles').select('id, nombre, avatar_url').in('id', ids)
-        perfiles?.forEach(p => {
-          if (mapa[p.id]) {
-            mapa[p.id].nombre     = p.nombre
-            mapa[p.id].avatar_url = p.avatar_url
-          }
-        })
-      }
-
-      const lista = Object.values(mapa).sort(
-        (a, b) => new Date(b.ultimaFecha) - new Date(a.ultimaFecha)
-      )
-      setConversaciones(lista)
-    } catch (err) {
-      console.error('Error cargando conversaciones:', err)
-    } finally {
-      setCargando(false)
-    }
-  }
-
-  useEffect(() => { cargar() }, [refrescarKey])
-
-  useEffect(() => {
-    cargar()
-    const canal = supabase
-      .channel('chatlist-updates')
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'mensajes',
-        filter: `destinatario_id=eq.${adminId}`,
-      }, () => cargar())
-      .subscribe()
-    return () => supabase.removeChannel(canal)
-  }, [adminId])
-
-  const formatHora = (fecha) => {
-    const d = new Date(fecha)
-    const hoy = new Date()
-    if (d.toDateString() === hoy.toDateString()) {
-      return d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
-    }
-    return d.toLocaleDateString('es', { day: 'numeric', month: 'short' })
-  }
-
-  const inicial = (nombre) => nombre ? nombre.charAt(0).toUpperCase() : '?'
-
-  if (cargando) return (
-    <div className="adm-chatlist-empty">
-      <div className="adm-spinner-sm" />
-      <span>Cargando conversaciones...</span>
-    </div>
-  )
-
-  if (conversaciones.length === 0) return (
-    <div className="adm-chatlist-empty">
-      <span style={{ fontSize: '32px', opacity: 0.3 }}>💬</span>
-      <p>No hay conversaciones aún.</p>
-      <p style={{ fontSize: '12px', color: 'var(--adm-muted)' }}>
-        Los usuarios pueden iniciarte un chat desde su portal.
-      </p>
-    </div>
-  )
-
-  return (
-    <div className="adm-chatlist">
-      {conversaciones.map(conv => {
-        const isActiva = usuarioActual?.id === conv.usuarioId
-        return (
-          <button
-            key={conv.usuarioId}
-            className={`adm-chatlist-item ${isActiva ? 'adm-chatlist-item--active' : ''}`}
-            onClick={() => onSeleccionar({ id: conv.usuarioId, nombre: conv.nombre, avatar_url: conv.avatar_url })}
-          >
-            {/* Avatar */}
-            <div className="adm-chatlist-avatar">
-              {conv.avatar_url
-                ? <img src={conv.avatar_url} alt={conv.nombre} />
-                : <span>{inicial(conv.nombre)}</span>
-              }
-              {conv.noLeidos > 0 && <span className="adm-chatlist-noti">{conv.noLeidos}</span>}
-            </div>
-
-            {/* Info */}
-            <div className="adm-chatlist-info">
-              <div className="adm-chatlist-row">
-                <span className="adm-chatlist-nombre">{conv.nombre}</span>
-                <span className="adm-chatlist-hora">{formatHora(conv.ultimaFecha)}</span>
-              </div>
-              <p className={`adm-chatlist-preview ${conv.noLeidos > 0 ? 'adm-chatlist-preview--unread' : ''}`}>
-                {conv.ultimoMensaje}
-              </p>
-            </div>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Dashboard principal ───────────────────────────────────────────────────────
 const AdminDashboard = ({ session, handleLogout, logo }) => {
   const [seccionActual,    setSeccionActual]    = useState('clientes')
   const [avatarUrl,        setAvatarUrl]        = useState(null)
-  const [chatConUsuario,   setChatConUsuario]   = useState(null)
   const [collapsed,        setCollapsed]        = useState(false)
   const [mensajesNoLeidos, setMensajesNoLeidos] = useState(0)
-  const [refrescarKey,     setRefrescarKey]     = useState(0)
 
   const seccionRef = useRef(seccionActual)
   useEffect(() => { seccionRef.current = seccionActual }, [seccionActual])
 
   const adminId = session.user.id
 
+  // ── Marcar inactivo al cerrar ─────────────────────────────────────────────
   useEffect(() => {
     if (!adminId) return
     const handleUnload = () => {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/perfiles?id=eq.${adminId}`
-      const data = JSON.stringify({ estado: 'Inactivo' })
-      navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }))
+      navigator.sendBeacon(url, new Blob([JSON.stringify({ estado: 'Inactivo' })], { type: 'application/json' }))
     }
     window.addEventListener('beforeunload', handleUnload)
     return () => window.removeEventListener('beforeunload', handleUnload)
   }, [adminId])
 
-  // ── Avatar ──────────────────────────────────────────────────────────────────
+  // ── Avatar ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const fetchAvatar = async () => {
-      const { data } = await supabase.from('perfiles').select('avatar_url').eq('id', adminId).single()
-      if (data?.avatar_url) setAvatarUrl(data.avatar_url)
-    }
-    fetchAvatar()
+    supabase.from('perfiles').select('avatar_url').eq('id', adminId).single()
+      .then(({ data }) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url) })
   }, [adminId])
 
+  // ── Badge de no leídos (mensajes + consultas pendientes) ──────────────────
   useEffect(() => {
-    const contarNoLeidos = async () => {
-      const { count } = await supabase
+    if (!adminId) return
+    const contar = async () => {
+      const { count: cMsg } = await supabase
         .from('mensajes')
         .select('id', { count: 'exact', head: true })
         .eq('destinatario_id', adminId)
-        .eq('leido', false)
-      setMensajesNoLeidos(count || 0)
+        .or('leido.eq.false,leido.is.null')
+
+      const { count: cConsultas } = await supabase
+        .from('consultas')
+        .select('id', { count: 'exact', head: true })
+        .eq('estado', 'pendiente')
+
+      setMensajesNoLeidos((cMsg || 0) + (cConsultas || 0))
     }
-    contarNoLeidos()
+    contar()
   }, [adminId])
 
-  // ── Realtime: incrementar cuando llegan mensajes nuevos ────────────────────
+  // ── Realtime badge en sidebar ─────────────────────────────────────────────
   useEffect(() => {
+    if (!adminId) return
     const canal = supabase
-      .channel('admin-mensajes-nuevos')
+      .channel('adm-badge-realtime')
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'mensajes',
         filter: `destinatario_id=eq.${adminId}`,
       }, () => {
-        if (seccionRef.current !== 'chat') {
-          setMensajesNoLeidos(prev => prev + 1)
-        }
+        if (seccionRef.current !== 'chat') setMensajesNoLeidos(prev => prev + 1)
+      })
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'consultas',
+      }, () => {
+        if (seccionRef.current !== 'chat') setMensajesNoLeidos(prev => prev + 1)
       })
       .subscribe()
     return () => supabase.removeChannel(canal)
   }, [adminId])
 
-  const marcarLeidosDe = async (usuarioId) => {
-    await supabase
-      .from('mensajes')
-      .update({ leido: true })
-      .eq('destinatario_id', adminId)
-      .eq('remitente_id', usuarioId)
-      .eq('leido', false)
-
-    const { count } = await supabase
-      .from('mensajes')
-      .select('id', { count: 'exact', head: true })
-      .eq('destinatario_id', adminId)
-      .eq('leido', false)
-    setMensajesNoLeidos(count || 0)
-
-    setRefrescarKey(k => k + 1)
-  }
-
-  const seleccionarChat = (usuario) => {
-    setChatConUsuario(usuario)
-    marcarLeidosDe(usuario.id)
-  }
-
   const navegarA = (id) => {
     setSeccionActual(id)
+    if (id === 'chat') setMensajesNoLeidos(0)
   }
 
+  // Permite que UsuariosView abra el chat directamente en la sección mensajes
   const abrirChatConUsuario = (usuario) => {
-    setChatConUsuario(usuario)
     setSeccionActual('chat')
-    marcarLeidosDe(usuario.id)
+    setMensajesNoLeidos(0)
   }
 
   const tituloSeccion = NAV_ITEMS.find(n => n.id === seccionActual)
@@ -259,7 +105,8 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
       <aside className="adm-sidebar">
         <div className="adm-sidebar-top">
           {!collapsed && <img src={logo} alt="TechSolutions" className="adm-logo" />}
-          <button className="adm-collapse-btn" onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Expandir' : 'Colapsar'}>
+          <button className="adm-collapse-btn" onClick={() => setCollapsed(c => !c)}
+            title={collapsed ? 'Expandir' : 'Colapsar'}>
             {collapsed ? '›' : '‹'}
           </button>
         </div>
@@ -278,15 +125,10 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
               >
                 <span className="adm-nav-icon">{item.icon}</span>
                 {!collapsed && <span className="adm-nav-label">{item.label}</span>}
-
                 {tieneNoti && (
                   <span className="adm-nav-badge adm-nav-badge--count">
                     {mensajesNoLeidos > 9 ? '9+' : mensajesNoLeidos}
                   </span>
-                )}
-
-                {esChatItem && chatConUsuario && !tieneNoti && (
-                  <span className="adm-nav-badge--active-chat" />
                 )}
               </button>
             )
@@ -313,14 +155,8 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
             {mensajesNoLeidos > 0 && seccionActual !== 'chat' && (
               <button className="adm-msg-alert" onClick={() => navegarA('chat')}>
                 <span className="adm-chat-dot" />
-                {mensajesNoLeidos} mensaje{mensajesNoLeidos !== 1 ? 's' : ''} nuevo{mensajesNoLeidos !== 1 ? 's' : ''}
+                {mensajesNoLeidos} notificación{mensajesNoLeidos !== 1 ? 'es' : ''} nueva{mensajesNoLeidos !== 1 ? 's' : ''}
               </button>
-            )}
-            {seccionActual === 'chat' && chatConUsuario && (
-              <div className="adm-chat-indicator">
-                <span className="adm-chat-dot" />
-                Chatando con <strong>{chatConUsuario.nombre}</strong>
-              </div>
             )}
             <div className="adm-user-chip">
               <img src={avatarUrl || 'https://via.placeholder.com/36'} alt="avatar" className="adm-user-avatar" />
@@ -339,43 +175,8 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
           {seccionActual === 'Usuarios'  && <UsuariosView onChatClick={abrirChatConUsuario} />}
           {seccionActual === 'perfil'    && <Perfil session={session} onAvatarUpdate={setAvatarUrl} />}
 
-          {seccionActual === 'chat' && (
-            <div className="adm-chat-layout">
-
-              {/* Panel izquierdo: lista de conversaciones */}
-              <div className="adm-chat-panel-left">
-                <div className="adm-chat-panel-header">
-                  <h3>Conversaciones</h3>
-                  {mensajesNoLeidos > 0 && (
-                    <span className="adm-chat-panel-badge">{mensajesNoLeidos} nuevos</span>
-                  )}
-                </div>
-                <ChatList
-                  adminId={adminId}
-                  onSeleccionar={seleccionarChat}
-                  usuarioActual={chatConUsuario}
-                  refrescarKey={refrescarKey}
-                />
-              </div>
-
-              {/* Panel derecho: chat activo o placeholder */}
-              <div className="adm-chat-panel-right">
-                {chatConUsuario ? (
-                  <Chat
-                    otroUsuarioId={chatConUsuario.id}
-                    nombreOtro={chatConUsuario.nombre}
-                    rolOtro={chatConUsuario.rol}
-                    avatarOtro={chatConUsuario.avatar_url}
-                  />
-                ) : (
-                  <div className="adm-chat-select-hint">
-                    <span style={{ fontSize: '40px', opacity: 0.2 }}>💬</span>
-                    <p>Selecciona una conversación de la lista</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          {/* ── CHAT: ahora es solo <ChatPage /> sin props ni lógica extra ── */}
+          {seccionActual === 'chat' && <ChatPage />}
         </main>
       </div>
     </div>

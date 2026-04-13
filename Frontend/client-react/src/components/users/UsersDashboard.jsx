@@ -1,18 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import './UsersDashboard.css'
 import Perfil     from '../shared/Perfil'
-import Chat       from '../shared/Chat'
+import ChatPage   from '../shared/ChatPage'   // ← reemplaza Chat
 import TareasView from './TareasView'
 import { ToastProvider } from '../shared/Toast'
 import { apiClient } from '../../apiClient'
 import { supabase } from '../../supabaseClient'
 
-const ADMIN_ID = import.meta.env.VITE_ADMIN_ID
-
 const NAV_ITEMS = [
-  { id: 'tareas', icon: '✅', label: 'Mis Tareas'    },
-  { id: 'dudas',  icon: '💬', label: 'Chat de Dudas'  },
-  { id: 'perfil', icon: '⚙️', label: 'Configuración'  },
+  { id: 'tareas', icon: '✅', label: 'Mis Tareas'   },
+  { id: 'chat',   icon: '💬', label: 'Chat'          },
+  { id: 'perfil', icon: '⚙️', label: 'Configuración' },
 ]
 
 const UserDashboard = ({ session, handleLogout, logo }) => {
@@ -26,19 +24,18 @@ const UserDashboard = ({ session, handleLogout, logo }) => {
 
   const userId = session?.user?.id
 
-  // ── Marcar inactivo al cerrar pestaña/ventana ─────────────────────────────
+  // ── Marcar inactivo al cerrar ─────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return
     const handleUnload = () => {
-      // navigator.sendBeacon es la única forma confiable de hacer requests al cerrar
       const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/perfiles?id=eq.${userId}`
-      const data = JSON.stringify({ estado: 'Inactivo' })
-      navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }))
+      navigator.sendBeacon(url, new Blob([JSON.stringify({ estado: 'Inactivo' })], { type: 'application/json' }))
     }
     window.addEventListener('beforeunload', handleUnload)
     return () => window.removeEventListener('beforeunload', handleUnload)
   }, [userId])
 
+  // ── Avatar ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchAvatar = async () => {
       try {
@@ -55,60 +52,39 @@ const UserDashboard = ({ session, handleLogout, logo }) => {
     fetchAvatar()
   }, [userId])
 
-  // ── Contar mensajes no leídos del admin al cargar ─────────────────────────
+  // ── Badge: mensajes no leídos + respuestas en consultas ──────────────────
   useEffect(() => {
     if (!userId) return
-    const contarNoLeidos = async () => {
-      const { count } = await supabase
+    const contar = async () => {
+      // Mensajes directos no leídos
+      const { count: cMsg } = await supabase
         .from('mensajes')
         .select('id', { count: 'exact', head: true })
         .eq('destinatario_id', userId)
-        .eq('leido', false)
-      setMensajesNoLeidos(count || 0)
+        .or('leido.eq.false,leido.is.null')
+      setMensajesNoLeidos(cMsg || 0)
     }
-    contarNoLeidos()
+    contar()
   }, [userId])
 
-  // ── Realtime: detectar mensajes nuevos del admin ──────────────────────────
+  // ── Realtime badge en sidebar ─────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return
     const canal = supabase
-      .channel('user-mensajes-nuevos')
+      .channel(`usr-badge-realtime-${userId}`)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'mensajes',
         filter: `destinatario_id=eq.${userId}`,
       }, () => {
-        if (seccionRef.current !== 'dudas') {
-          setMensajesNoLeidos(prev => prev + 1)
-        }
+        if (seccionRef.current !== 'chat') setMensajesNoLeidos(prev => prev + 1)
       })
       .subscribe()
     return () => supabase.removeChannel(canal)
   }, [userId])
 
-  // ── Marcar como leídos al abrir el chat ──────────────────────────────────
-  const marcarComoLeidos = async () => {
-    const { error } = await supabase
-      .from('mensajes')
-      .update({ leido: true })
-      .eq('destinatario_id', userId)
-      .eq('remitente_id', ADMIN_ID)
-      .or('leido.eq.false,leido.is.null')
-      .select()
-
-    if (!error) {
-      const { count } = await supabase
-        .from('mensajes')
-        .select('id', { count: 'exact', head: true })
-        .eq('destinatario_id', userId)
-        .eq('leido', false)
-      setMensajesNoLeidos(count || 0)
-    }
-  }
-
   const navegarA = (id) => {
     setSeccionActual(id)
-    if (id === 'dudas') marcarComoLeidos()
+    if (id === 'chat') setMensajesNoLeidos(0)
   }
 
   const tituloSeccion = NAV_ITEMS.find(n => n.id === seccionActual)
@@ -122,7 +98,8 @@ const UserDashboard = ({ session, handleLogout, logo }) => {
         <aside className="usr-sidebar">
           <div className="usr-sidebar-top">
             {!collapsed && <img src={logo} alt="TechSolutions" className="usr-logo" />}
-            <button className="usr-collapse-btn" onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Expandir' : 'Colapsar'}>
+            <button className="usr-collapse-btn" onClick={() => setCollapsed(c => !c)}
+              title={collapsed ? 'Expandir' : 'Colapsar'}>
               {collapsed ? '›' : '‹'}
             </button>
           </div>
@@ -139,7 +116,7 @@ const UserDashboard = ({ session, handleLogout, logo }) => {
 
           <nav className="usr-nav">
             {NAV_ITEMS.map(item => {
-              const esChatItem = item.id === 'dudas'
+              const esChatItem = item.id === 'chat'
               const tieneNoti  = esChatItem && mensajesNoLeidos > 0
               return (
                 <button
@@ -177,11 +154,10 @@ const UserDashboard = ({ session, handleLogout, logo }) => {
               </div>
             </div>
             <div className="usr-topbar-right">
-              {/* Alerta en topbar cuando hay mensajes nuevos */}
-              {mensajesNoLeidos > 0 && seccionActual !== 'dudas' && (
-                <button className="usr-msg-alert" onClick={() => navegarA('dudas')}>
+              {mensajesNoLeidos > 0 && seccionActual !== 'chat' && (
+                <button className="usr-msg-alert" onClick={() => navegarA('chat')}>
                   <span className="usr-chat-dot" />
-                  {mensajesNoLeidos} mensaje{mensajesNoLeidos !== 1 ? 's' : ''} del admin
+                  {mensajesNoLeidos} mensaje{mensajesNoLeidos !== 1 ? 's' : ''} nuevo{mensajesNoLeidos !== 1 ? 's' : ''}
                 </button>
               )}
               <div className="usr-user-chip">
@@ -196,14 +172,10 @@ const UserDashboard = ({ session, handleLogout, logo }) => {
 
           <main className="usr-content">
             {seccionActual === 'tareas' && <TareasView usuarioId={userId} />}
-
-            {seccionActual === 'dudas' && (
-              <div className="usr-chat-wrapper">
-                <Chat otroUsuarioId={ADMIN_ID} nombreOtro="Administrador" avatarOtro={null} />
-              </div>
-            )}
-
             {seccionActual === 'perfil' && <Perfil session={session} onAvatarUpdate={setAvatarUrl} />}
+
+            {/* ── CHAT: ahora es solo <ChatPage /> sin props ni lógica extra ── */}
+            {seccionActual === 'chat' && <ChatPage />}
           </main>
         </div>
       </div>
