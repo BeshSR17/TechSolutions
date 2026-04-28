@@ -1,16 +1,16 @@
 // hooks/useNotificaciones.js
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import { useToast } from '../components/shared/Toast'
 
 export function useNotificaciones() {
   const [miId,           setMiId]    = useState(null)
-  const [esAdmin,        setEsAdmin] = useState(false)  // ← estado real, no solo ref
+  const [esAdmin,        setEsAdmin] = useState(false)
   const [badgeMensajes,  setBadgeMensajes]  = useState(0)
   const [badgeConsultas, setBadgeConsultas] = useState(0)
   const toast = useToast()
 
-  // ── 1. Obtener usuario y rol ───────────────────────────────────────────────
+  // ── 1. Usuario y rol ──────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data?.user) return
@@ -19,14 +19,13 @@ export function useNotificaciones() {
         .from('perfiles').select('rol').eq('id', id).single()
       const admin = perfil?.rol === 'Administrador' || perfil?.rol === 'Admin'
       setEsAdmin(admin)
-      setMiId(id)  // ← miId se setea DESPUÉS de tener el rol
+      setMiId(id)
     })
   }, [])
 
-  // ── 2. Conteos iniciales (cuando ya tenemos miId y esAdmin) ───────────────
+  // ── 2. Conteos iniciales ───────────────────────────────────────────────────
   useEffect(() => {
     if (!miId) return
-
     const cargar = async () => {
       const { count: cMsg } = await supabase
         .from('mensajes')
@@ -52,14 +51,12 @@ export function useNotificaciones() {
         setBadgeConsultas(cC || 0)
       }
     }
-
     cargar()
   }, [miId, esAdmin])
 
-  // ── 3. Canal mensajes ─────────────────────────────────────────────────────
+  // ── 3. Canal mensajes directos ────────────────────────────────────────────
   useEffect(() => {
     if (!miId) return
-
     const canal = supabase
       .channel(`notif-msg-${miId}`)
       .on('postgres_changes', {
@@ -94,41 +91,32 @@ export function useNotificaciones() {
           })
         }
       })
-      .subscribe((status) => {
-        console.log('[notif-msg] estado canal:', status)
-      })
+      .subscribe()
 
     return () => supabase.removeChannel(canal)
-  }, [miId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [miId]) // eslint-disable-line
 
-  // ── 4. Canal consultas (solo admin, se monta cuando esAdmin es true) ───────
+  // ── 4. Canal broadcast consultas nuevas (solo admin) ──────────────────────
   useEffect(() => {
-    if (!miId || !esAdmin) return  // ← solo corre si es admin confirmado
-
-    console.log('[notif-consultas] suscribiendo canal para admin:', miId)
+    if (!miId || !esAdmin) return
 
     const canal = supabase
-      .channel(`notif-cons-${miId}`)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'consultas',
-      }, async (payload) => {
-        console.log('[notif-consultas] nueva consulta recibida:', payload.new)
-        const consulta = payload.new
+      .channel('nueva-consulta-broadcast')  // nombre fijo, mismo en sender y receiver
+      .on('broadcast', { event: 'nueva_consulta' }, async ({ payload }) => {
+        console.log('[broadcast] nueva consulta recibida:', payload)
         setBadgeConsultas(prev => prev + 1)
         const { data: usr } = await supabase
-          .from('perfiles').select('nombre').eq('id', consulta.usuario_id).single()
+          .from('perfiles').select('nombre').eq('id', payload.usuario_id).single()
         toast.notif({
           tipo:   'consulta_nueva',
           titulo: '🎫 Nueva consulta',
-          texto:  `${usr?.nombre || 'Un usuario'}: ${consulta.titulo}`,
+          texto:  `${usr?.nombre || 'Un usuario'}: ${payload.titulo}`,
         })
       })
-      .subscribe((status) => {
-        console.log('[notif-consultas] estado canal:', status)
-      })
+      .subscribe(status => console.log('[broadcast consultas] estado:', status))
 
     return () => supabase.removeChannel(canal)
-  }, [miId, esAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [miId, esAdmin]) // eslint-disable-line
 
   return {
     miId,

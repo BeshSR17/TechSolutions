@@ -2,7 +2,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 
-// ── Hook para mensajes dentro de una consulta específica ─────────────────────
 export function useChatConsulta(consultaId, otroUsuarioId) {
   const [mensajes, setMensajes] = useState([])
   const [miId,     setMiId]     = useState(null)
@@ -27,7 +26,6 @@ export function useChatConsulta(consultaId, otroUsuarioId) {
       setMensajes(data || [])
       setCargando(false)
 
-      // Marcar como leídos
       await supabase
         .from('mensajes')
         .update({ leido: true })
@@ -72,12 +70,11 @@ export function useChatConsulta(consultaId, otroUsuarioId) {
   return { mensajes, enviarMensaje, miId, cargando }
 }
 
-// ── Hook principal de consultas ───────────────────────────────────────────────
 export function useConsultas() {
-  const [consultas,  setConsultas]  = useState([])
-  const [miId,       setMiId]       = useState(null)
-  const [miRol,      setMiRol]      = useState(null)
-  const [cargando,   setCargando]   = useState(true)
+  const [consultas, setConsultas] = useState([])
+  const [miId,      setMiId]      = useState(null)
+  const [miRol,     setMiRol]     = useState(null)
+  const [cargando,  setCargando]  = useState(true)
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -103,7 +100,6 @@ export function useConsultas() {
 
   useEffect(() => { if (miId) cargar() }, [miId, cargar])
 
-  // Realtime — cambios en consultas
   useEffect(() => {
     if (!miId) return
     const canal = supabase
@@ -116,16 +112,31 @@ export function useConsultas() {
 
   const crearConsulta = async ({ titulo, mensaje_inicial }) => {
     if (!miId) return { error: 'No autenticado' }
+
     const { data, error } = await supabase
       .from('consultas')
       .insert({ usuario_id: miId, titulo, mensaje_inicial })
       .select().single()
-    if (!error) cargar()
+
+    if (!error && data) {
+      cargar()
+
+      // ── Broadcast para notificar al admin en tiempo real ──────────────────
+      // Usamos un canal temporal solo para enviar el evento
+      const canal = supabase.channel('nueva-consulta-broadcast')
+      await canal.subscribe()  // necesario antes de send
+      await canal.send({
+        type:    'broadcast',
+        event:   'nueva_consulta',
+        payload: data,
+      })
+      supabase.removeChannel(canal)
+    }
+
     return { data, error }
   }
 
   const aceptarConsulta = async (consultaId) => {
-    // Verificar que siga pendiente
     const { data: fresh } = await supabase
       .from('consultas').select('estado').eq('id', consultaId).single()
     if (fresh?.estado !== 'pendiente') return { error: 'Ya fue tomada por otro administrador' }
