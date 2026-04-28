@@ -121,24 +121,22 @@ export function useConsultas() {
     if (!error && data) {
       cargar()
 
-      // Buscar admin para notificarle
       const { data: admins } = await supabase
         .from('perfiles')
         .select('id')
         .or('rol.eq.Administrador,rol.eq.Admin')
         .limit(1)
 
-      console.log('[CREAR] admins encontrados:', admins)
+      // ← borra el console.log de admins
 
       if (admins?.[0]) {
-        const { data: msgData, error: msgError } = await supabase
-          .from('mensajes').insert({
-            remitente_id:    miId,
-            destinatario_id: admins[0].id,
-            contenido:       titulo,
-            consulta_id:     data.id,
-          }).select().single()
-        console.log('[CREAR] mensaje insertado:', msgData, 'error:', msgError)
+        await supabase.from('mensajes').insert({  // ← sin .select().single() ni logs
+          remitente_id:    miId,
+          destinatario_id: admins[0].id,
+          contenido:       titulo,
+          consulta_id:     data.id,
+        })
+        // ← borra el console.log del mensaje insertado
       }
     }
 

@@ -28,7 +28,7 @@ export function ToastProvider({ children }) {
       <div className="toast-container">
         {toasts.map(t => (
           t.esNotif ? (
-            // Toast de notificación (mensaje + consulta)
+            
             <div key={t.id} className={`toast toast-notif toast-notif--${t.tipo}`}>
               <div className="toast-notif-icono">
                 {t.tipo === 'consulta_nueva' ? '🎫' : '💬'}
@@ -40,7 +40,7 @@ export function ToastProvider({ children }) {
               <button className="toast-close" onClick={() => cerrar(t.id)}>✕</button>
             </div>
           ) : (
-            // Toast normal (success/error/warning/info)
+            
             <div key={t.id} className={`toast toast--${t.tipo}`}>
               <span className="toast-icon">
                 {t.tipo === 'success' && '✅'}
