@@ -678,7 +678,7 @@
   height: 8px;
   background: #ef4444;
   border-radius: 50%;
-  border: 2px solid #1e293b; /* ajusta al color de fondo de tu tab */
+  border: 2px solid #13161f; /* ← era #1e293b, ahora coincide con --cp-card2 */
   animation: pulso-punto 1.8s ease-in-out infinite;
   pointer-events: none;
 }
