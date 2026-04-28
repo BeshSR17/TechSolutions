@@ -121,23 +121,24 @@ export function useConsultas() {
     if (!error && data) {
       cargar()
 
-      // Canal con nombre único para enviar — nunca colisiona con el receiver
       const nombreCanal = `consulta-send-${Date.now()}`
       const canal = supabase.channel(nombreCanal)
       
       await new Promise(resolve => {
         canal.subscribe(status => {
+          console.log('[SEND] estado suscripción:', status)
           if (status === 'SUBSCRIBED') resolve()
         })
       })
       
-      await canal.send({
+      console.log('[SEND] enviando broadcast con payload:', data)
+      const resultado = await canal.send({
         type:    'broadcast',
         event:   'nueva_consulta',
         payload: data,
       })
+      console.log('[SEND] resultado del send:', resultado)
       
-      // Pequeño delay antes de remover para asegurar que el mensaje se envió
       setTimeout(() => supabase.removeChannel(canal), 1000)
     }
 

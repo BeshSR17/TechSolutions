@@ -104,22 +104,24 @@ export function useNotificaciones() {
   useEffect(() => {
     if (!miId) return
 
-    // Nombre fijo para receiver, distinto al sender
+    console.log('[RECEIVER] montando canal, miId:', miId, 'esAdmin:', esAdminRef.current)
+
     const canal = supabase
-      .channel('consultas-broadcast-receiver')  // ← nombre diferente al sender
+      .channel('consultas-broadcast-receiver')
       .on('broadcast', { event: 'nueva_consulta' }, async ({ payload }) => {
+        console.log('[RECEIVER] evento recibido, esAdmin:', esAdminRef.current, 'payload:', payload)
         if (!esAdminRef.current) return
-        console.log('[broadcast] nueva consulta recibida:', payload)
         setBadgeConsultas(prev => prev + 1)
         const { data: usr } = await supabase
           .from('perfiles').select('nombre').eq('id', payload.usuario_id).single()
+        console.log('[RECEIVER] mostrando toast para usuario:', usr?.nombre)
         toast.notif({
           tipo:   'consulta_nueva',
           titulo: '🎫 Nueva consulta',
           texto:  `${usr?.nombre || 'Un usuario'}: ${payload.titulo}`,
         })
       })
-      .subscribe(status => console.log('[broadcast receiver] estado:', status))
+      .subscribe(status => console.log('[RECEIVER] estado canal:', status))
 
     return () => supabase.removeChannel(canal)
   }, [miId]) // eslint-disable-line
