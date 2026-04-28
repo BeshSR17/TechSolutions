@@ -121,25 +121,24 @@ export function useConsultas() {
     if (!error && data) {
       cargar()
 
-      const nombreCanal = `consulta-send-${Date.now()}`
-      const canal = supabase.channel(nombreCanal)
-      
-      await new Promise(resolve => {
-        canal.subscribe(status => {
-          console.log('[SEND] estado suscripción:', status)
-          if (status === 'SUBSCRIBED') resolve()
+      // Buscar admin para notificarle
+      const { data: admins } = await supabase
+        .from('perfiles')
+        .select('id')
+        .or('rol.eq.Administrador,rol.eq.Admin')
+        .limit(1)
+
+      if (admins?.[0]) {
+        // Insertar mensaje de notificación vinculado a la consulta
+        // NO aparece en chats directos porque tiene consulta_id
+        // El handler de useNotificaciones lo detecta y muestra toast
+        await supabase.from('mensajes').insert({
+          remitente_id:    miId,
+          destinatario_id: admins[0].id,
+          contenido:       titulo,
+          consulta_id:     data.id,
         })
-      })
-      
-      console.log('[SEND] enviando broadcast con payload:', data)
-      const resultado = await canal.send({
-        type:    'broadcast',
-        event:   'nueva_consulta',
-        payload: data,
-      })
-      console.log('[SEND] resultado del send:', resultado)
-      
-      setTimeout(() => supabase.removeChannel(canal), 1000)
+      }
     }
 
     return { data, error }
