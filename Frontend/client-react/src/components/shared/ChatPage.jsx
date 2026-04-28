@@ -51,6 +51,7 @@ export default function ChatPage({
           )}
         </button>
 
+        
         <button
           className={`cp-tab ${seccion === 'consultas' ? 'active' : ''}`}
           onClick={() => cambiarSeccion('consultas')}
@@ -59,6 +60,10 @@ export default function ChatPage({
           <span className="cp-tab-label">Consultas</span>
           {badgeConsultas > 0 && (
             <span className="cp-tab-badge">{badgeConsultas > 99 ? '99+' : badgeConsultas}</span>
+          )}
+          {/* Punto rojo adicional cuando hay consultas y estamos en mensajes */}
+          {badgeConsultas > 0 && seccion === 'mensajes' && (
+            <span className="cp-tab-dot" />
           )}
         </button>
       </div>
