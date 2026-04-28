@@ -90,7 +90,7 @@ export function useNotificaciones() {
             .single()
 
           if (consulta?.estado === 'pendiente' && esAdminRef.current) {
-            // Es el mensaje de notificación de consulta NUEVA (estado pendiente)
+            
             setBadgeConsultas(prev => prev + 1)
             toast.notif({
               tipo:   'consulta_nueva',
@@ -98,7 +98,7 @@ export function useNotificaciones() {
               texto:  `${rem?.nombre || 'Un usuario'}: ${consulta.titulo}`,
             })
           } else if (consulta?.estado === 'activa') {
-            // Es un mensaje dentro de una consulta activa
+            
             setBadgeConsultas(prev => prev + 1)
             toast.notif({
               tipo:   'consulta',

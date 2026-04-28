@@ -128,16 +128,17 @@ export function useConsultas() {
         .or('rol.eq.Administrador,rol.eq.Admin')
         .limit(1)
 
+      console.log('[CREAR] admins encontrados:', admins)
+
       if (admins?.[0]) {
-        // Insertar mensaje de notificación vinculado a la consulta
-        // NO aparece en chats directos porque tiene consulta_id
-        // El handler de useNotificaciones lo detecta y muestra toast
-        await supabase.from('mensajes').insert({
-          remitente_id:    miId,
-          destinatario_id: admins[0].id,
-          contenido:       titulo,
-          consulta_id:     data.id,
-        })
+        const { data: msgData, error: msgError } = await supabase
+          .from('mensajes').insert({
+            remitente_id:    miId,
+            destinatario_id: admins[0].id,
+            contenido:       titulo,
+            consulta_id:     data.id,
+          }).select().single()
+        console.log('[CREAR] mensaje insertado:', msgData, 'error:', msgError)
       }
     }
 
