@@ -1,5 +1,5 @@
 // hooks/useNotificaciones.js
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { useToast } from '../components/shared/Toast'
 
@@ -8,7 +8,11 @@ export function useNotificaciones() {
   const [esAdmin,        setEsAdmin] = useState(false)
   const [badgeMensajes,  setBadgeMensajes]  = useState(0)
   const [badgeConsultas, setBadgeConsultas] = useState(0)
+  const esAdminRef = useRef(false)  // ref para acceso inmediato dentro de callbacks
   const toast = useToast()
+
+  // necesitamos useRef
+  // agrega: import { useEffect, useState, useCallback, useRef } from 'react'
 
   // ── 1. Usuario y rol ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -18,6 +22,7 @@ export function useNotificaciones() {
       const { data: perfil } = await supabase
         .from('perfiles').select('rol').eq('id', id).single()
       const admin = perfil?.rol === 'Administrador' || perfil?.rol === 'Admin'
+      esAdminRef.current = admin
       setEsAdmin(admin)
       setMiId(id)
     })
@@ -96,14 +101,18 @@ export function useNotificaciones() {
     return () => supabase.removeChannel(canal)
   }, [miId]) // eslint-disable-line
 
-  // ── 4. Canal broadcast consultas nuevas (solo admin) ──────────────────────
+  // ── 4. Canal broadcast consultas — se monta apenas miId esté listo ────────
+  // NO depende de esAdmin para montarse, verifica el rol dentro del handler
   useEffect(() => {
-    if (!miId || !esAdmin) return
+    if (!miId) return  // solo espera miId, no esAdmin
 
     const canal = supabase
-      .channel('nueva-consulta-broadcast')  // nombre fijo, mismo en sender y receiver
+      .channel('nueva-consulta-broadcast')
       .on('broadcast', { event: 'nueva_consulta' }, async ({ payload }) => {
-        console.log('[broadcast] nueva consulta recibida:', payload)
+        // Verificar rol en el momento del evento usando el ref (instantáneo)
+        if (!esAdminRef.current) return
+
+        console.log('[broadcast] nueva consulta:', payload)
         setBadgeConsultas(prev => prev + 1)
         const { data: usr } = await supabase
           .from('perfiles').select('nombre').eq('id', payload.usuario_id).single()
@@ -116,7 +125,7 @@ export function useNotificaciones() {
       .subscribe(status => console.log('[broadcast consultas] estado:', status))
 
     return () => supabase.removeChannel(canal)
-  }, [miId, esAdmin]) // eslint-disable-line
+  }, [miId]) // eslint-disable-line — solo miId, monta apenas hay sesión
 
   return {
     miId,

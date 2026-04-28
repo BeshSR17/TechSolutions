@@ -665,11 +665,6 @@
   .cp-toast { min-width: unset; }
 }
 
-/* Asegúrate que cp-tab tenga position relative */
-.cp-tab {
-  position: relative;
-}
-
 .cp-tab-punto {
   position: absolute;
   top: 6px;
@@ -678,7 +673,7 @@
   height: 8px;
   background: #ef4444;
   border-radius: 50%;
-  border: 2px solid #13161f; /* ← era #1e293b, ahora coincide con --cp-card2 */
+  border: 2px solid #1e293b; /* ajusta al color de fondo de tu tab */
   animation: pulso-punto 1.8s ease-in-out infinite;
   pointer-events: none;
 }

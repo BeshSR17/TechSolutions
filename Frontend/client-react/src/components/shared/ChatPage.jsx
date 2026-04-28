@@ -58,10 +58,10 @@ export default function ChatPage({
           <span className="cp-tab-icon">🎫</span>
           <span className="cp-tab-label">Consultas</span>
           {badgeConsultas > 0 && (
-            <>
-              <span className="cp-tab-badge">{badgeConsultas > 99 ? '99+' : badgeConsultas}</span>
-              {seccion !== 'consultas' && <span className="cp-tab-punto" />}
-            </>
+            <span className="cp-tab-badge">{badgeConsultas > 99 ? '99+' : badgeConsultas}</span>
+          )}
+          {badgeConsultas > 0 && seccion !== 'consultas' && (
+            <span className="cp-tab-punto" />
           )}
         </button>
       </div>
