@@ -121,16 +121,24 @@ export function useConsultas() {
     if (!error && data) {
       cargar()
 
-      // ── Broadcast para notificar al admin en tiempo real ──────────────────
-      // Usamos un canal temporal solo para enviar el evento
-      const canal = supabase.channel('nueva-consulta-broadcast')
-      await canal.subscribe()  // necesario antes de send
+      // Canal con nombre único para enviar — nunca colisiona con el receiver
+      const nombreCanal = `consulta-send-${Date.now()}`
+      const canal = supabase.channel(nombreCanal)
+      
+      await new Promise(resolve => {
+        canal.subscribe(status => {
+          if (status === 'SUBSCRIBED') resolve()
+        })
+      })
+      
       await canal.send({
         type:    'broadcast',
         event:   'nueva_consulta',
         payload: data,
       })
-      supabase.removeChannel(canal)
+      
+      // Pequeño delay antes de remover para asegurar que el mensaje se envió
+      setTimeout(() => supabase.removeChannel(canal), 1000)
     }
 
     return { data, error }

@@ -78,6 +78,10 @@ export default function ChatPage({
         {seccion === 'consultas' && (
           <Consultas onLeerConsultas={limpiarBadgeConsultas} />
         )}
+        {/* Debug temporal — quitar después */}
+        {seccion !== 'consultas' && (
+          <span className="cp-tab-punto" />
+        )}
       </div>
     </div>
   )

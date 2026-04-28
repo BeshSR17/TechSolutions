@@ -665,18 +665,26 @@
   .cp-toast { min-width: unset; }
 }
 
+/* En ChatPage.css — reemplaza .cp-tab-punto completo */
 .cp-tab-punto {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 8px;
-  height: 8px;
+  top: 10px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
   background: #ef4444;
   border-radius: 50%;
-  border: 2px solid #1e293b; /* ajusta al color de fondo de tu tab */
+  border: 2px solid var(--cp-bg); /* usa la variable del fondo más oscuro */
   animation: pulso-punto 1.8s ease-in-out infinite;
   pointer-events: none;
+  z-index: 10;
 }
+
+{/* Debug temporal — quitar después */}
+{seccion !== 'consultas' && (
+  <span className="cp-tab-punto" />
+)}
+
 
 @keyframes pulso-punto {
   0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0   rgba(239,68,68,0.6); }

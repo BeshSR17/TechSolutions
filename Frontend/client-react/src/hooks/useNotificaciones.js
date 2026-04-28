@@ -101,18 +101,15 @@ export function useNotificaciones() {
     return () => supabase.removeChannel(canal)
   }, [miId]) // eslint-disable-line
 
-  // ── 4. Canal broadcast consultas — se monta apenas miId esté listo ────────
-  // NO depende de esAdmin para montarse, verifica el rol dentro del handler
   useEffect(() => {
-    if (!miId) return  // solo espera miId, no esAdmin
+    if (!miId) return
 
+    // Nombre fijo para receiver, distinto al sender
     const canal = supabase
-      .channel('nueva-consulta-broadcast')
+      .channel('consultas-broadcast-receiver')  // ← nombre diferente al sender
       .on('broadcast', { event: 'nueva_consulta' }, async ({ payload }) => {
-        // Verificar rol en el momento del evento usando el ref (instantáneo)
         if (!esAdminRef.current) return
-
-        console.log('[broadcast] nueva consulta:', payload)
+        console.log('[broadcast] nueva consulta recibida:', payload)
         setBadgeConsultas(prev => prev + 1)
         const { data: usr } = await supabase
           .from('perfiles').select('nombre').eq('id', payload.usuario_id).single()
@@ -122,10 +119,10 @@ export function useNotificaciones() {
           texto:  `${usr?.nombre || 'Un usuario'}: ${payload.titulo}`,
         })
       })
-      .subscribe(status => console.log('[broadcast consultas] estado:', status))
+      .subscribe(status => console.log('[broadcast receiver] estado:', status))
 
     return () => supabase.removeChannel(canal)
-  }, [miId]) // eslint-disable-line — solo miId, monta apenas hay sesión
+  }, [miId]) // eslint-disable-line
 
   return {
     miId,
