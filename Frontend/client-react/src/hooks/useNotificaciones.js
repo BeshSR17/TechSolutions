@@ -1,81 +1,62 @@
 // hooks/useNotificaciones.js
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../supabaseClient'
+import { useToast } from '../components/shared/Toast'
 
 export function useNotificaciones() {
-  const [miId,            setMiId]            = useState(null)
-  const [badgeMensajes,   setBadgeMensajes]    = useState(0)
-  const [badgeConsultas,  setBadgeConsultas]   = useState(0)
-  const [toasts,          setToasts]           = useState([])
-  const canalRef = useRef(null)
+  const [miId,           setMiId]          = useState(null)
+  const [badgeMensajes,  setBadgeMensajes] = useState(0)
+  const [badgeConsultas, setBadgeConsultas]= useState(0)
+  const esAdminRef = useRef(false)   // ← cache del rol, sin re-renders
+  const toast = useToast()
 
-  // ── Obtener usuario ───────────────────────────────────────────────────────
+  // ── Usuario + rol ─────────────────────────────────────────────────────────
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) setMiId(data.user.id)
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data?.user) return
+      const id = data.user.id
+      setMiId(id)
+      const { data: perfil } = await supabase
+        .from('perfiles').select('rol').eq('id', id).single()
+      esAdminRef.current = perfil?.rol === 'Administrador' || perfil?.rol === 'Admin'
     })
   }, [])
 
-  // ── Mostrar toast ─────────────────────────────────────────────────────────
-  const mostrarToast = useCallback((toast) => {
-    const id = Date.now()
-    setToasts(prev => [...prev, { ...toast, id }])
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id))
-    }, 4500)
-  }, [])
-
-  const cerrarToast = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id))
-  }, [])
-
-  // ── Cargar conteos iniciales de no leídos ─────────────────────────────────
+  // ── Conteos iniciales ─────────────────────────────────────────────────────
   const cargarConteos = useCallback(async () => {
     if (!miId) return
 
-    // Mensajes directos no leídos (sin consulta_id)
     const { count: cMsg } = await supabase
       .from('mensajes')
       .select('id', { count: 'exact', head: true })
       .is('consulta_id', null)
       .eq('destinatario_id', miId)
       .or('leido.eq.false,leido.is.null')
-
     setBadgeMensajes(cMsg || 0)
 
-    // Consultas pendientes (admin) o con mensajes no leídos (usuario)
-    const { data: perfil } = await supabase
-      .from('perfiles').select('rol').eq('id', miId).single()
-
-    const esAdmin = perfil?.rol === 'Administrador' || perfil?.rol === 'Admin'
-
-    if (esAdmin) {
-      const { count: cConsultas } = await supabase
+    if (esAdminRef.current) {
+      const { count: cC } = await supabase
         .from('consultas')
         .select('id', { count: 'exact', head: true })
         .eq('estado', 'pendiente')
-      setBadgeConsultas(cConsultas || 0)
+      setBadgeConsultas(cC || 0)
     } else {
-      // Mensajes no leídos dentro de consultas activas del usuario
-      const { count: cConsultas } = await supabase
+      const { count: cC } = await supabase
         .from('mensajes')
         .select('id', { count: 'exact', head: true })
         .not('consulta_id', 'is', null)
         .eq('destinatario_id', miId)
         .or('leido.eq.false,leido.is.null')
-      setBadgeConsultas(cConsultas || 0)
+      setBadgeConsultas(cC || 0)
     }
   }, [miId])
 
-  useEffect(() => {
-    if (miId) cargarConteos()
-  }, [miId, cargarConteos])
+  useEffect(() => { if (miId) cargarConteos() }, [miId, cargarConteos])
 
   // ── Realtime ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!miId) return
 
-    // Canal mensajes nuevos dirigidos a mí
     const canalMensajes = supabase
       .channel(`notif-mensajes-${miId}`)
       .on('postgres_changes', {
@@ -83,84 +64,77 @@ export function useNotificaciones() {
         filter: `destinatario_id=eq.${miId}`,
       }, async (payload) => {
         const msg = payload.new
+        const { data: rem } = await supabase
+          .from('perfiles').select('nombre').eq('id', msg.remitente_id).single()
 
         if (!msg.consulta_id) {
-          // Mensaje directo
           setBadgeMensajes(prev => prev + 1)
-          // Obtener nombre del remitente para el toast
-          const { data: remitente } = await supabase
-            .from('perfiles').select('nombre, avatar_url').eq('id', msg.remitente_id).single()
-          mostrarToast({
-            tipo: 'mensaje',
-            titulo: remitente?.nombre || 'Nuevo mensaje',
-            texto: msg.contenido.length > 60
+          toast.notif({
+            tipo:   'mensaje',
+            titulo: rem?.nombre || 'Nuevo mensaje',
+            texto:  msg.contenido.length > 60
               ? msg.contenido.slice(0, 60) + '...'
               : msg.contenido,
-            avatar: remitente?.avatar_url,
-            nombre: remitente?.nombre,
           })
         } else {
-          // Mensaje dentro de consulta
           setBadgeConsultas(prev => prev + 1)
-          const { data: remitente } = await supabase
-            .from('perfiles').select('nombre, avatar_url').eq('id', msg.remitente_id).single()
-          const { data: consulta } = await supabase
+          const { data: cons } = await supabase
             .from('consultas').select('titulo').eq('id', msg.consulta_id).single()
-          mostrarToast({
-            tipo: 'consulta',
-            titulo: consulta?.titulo || 'Consulta',
-            texto: `${remitente?.nombre || 'Alguien'}: ${msg.contenido.length > 50 ? msg.contenido.slice(0, 50) + '...' : msg.contenido}`,
-            avatar: remitente?.avatar_url,
-            nombre: remitente?.nombre,
+          toast.notif({
+            tipo:   'consulta',
+            titulo: cons?.titulo || 'Consulta',
+            texto:  `${rem?.nombre || 'Alguien'}: ${
+              msg.contenido.length > 50
+                ? msg.contenido.slice(0, 50) + '...'
+                : msg.contenido
+            }`,
           })
         }
       })
       .subscribe()
 
-    // Canal consultas nuevas (solo admin)
-    const canalConsultas = supabase
-      .channel(`notif-consultas-${miId}`)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'consultas',
-      }, async (payload) => {
-        const consulta = payload.new
-        // Verificar si soy admin antes de notificar
-        const { data: perfil } = await supabase
-          .from('perfiles').select('rol').eq('id', miId).single()
-        const esAdmin = perfil?.rol === 'Administrador' || perfil?.rol === 'Admin'
-        if (!esAdmin) return
+    // ── Canal consultas nuevas ────────────────────────────────────────────
+    // Solo se suscribe si es admin (el ref ya está resuelto para este punto)
+    // Usamos un pequeño delay para asegurar que esAdminRef esté listo
+    let canalConsultas = null
 
-        setBadgeConsultas(prev => prev + 1)
-        const { data: usuario } = await supabase
-          .from('perfiles').select('nombre, avatar_url').eq('id', consulta.usuario_id).single()
-        mostrarToast({
-          tipo: 'consulta_nueva',
-          titulo: '🎫 Nueva consulta',
-          texto: `${usuario?.nombre || 'Un usuario'}: ${consulta.titulo}`,
-          avatar: usuario?.avatar_url,
-          nombre: usuario?.nombre,
+    const suscribirConsultas = () => {
+      if (!esAdminRef.current) return  // usuario normal, no necesita este canal
+
+      canalConsultas = supabase
+        .channel(`notif-consultas-${miId}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'consultas',
+        }, async (payload) => {
+          if (!esAdminRef.current) return  // doble check
+          const consulta = payload.new
+          setBadgeConsultas(prev => prev + 1)
+          const { data: usr } = await supabase
+            .from('perfiles').select('nombre').eq('id', consulta.usuario_id).single()
+          toast.notif({
+            tipo:   'consulta_nueva',
+            titulo: '🎫 Nueva consulta',
+            texto:  `${usr?.nombre || 'Un usuario'}: ${consulta.titulo}`,
+          })
         })
-      })
-      .subscribe()
+        .subscribe()
+    }
 
-    canalRef.current = { canalMensajes, canalConsultas }
+    // Pequeño delay para que esAdminRef.current esté resuelto
+    const timer = setTimeout(suscribirConsultas, 500)
 
     return () => {
+      clearTimeout(timer)
       supabase.removeChannel(canalMensajes)
-      supabase.removeChannel(canalConsultas)
+      if (canalConsultas) supabase.removeChannel(canalConsultas)
     }
-  }, [miId, mostrarToast])
-
-  const limpiarBadgeMensajes  = useCallback(() => setBadgeMensajes(0),  [])
-  const limpiarBadgeConsultas = useCallback(() => setBadgeConsultas(0), [])
+  }, [miId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
+    miId,
     badgeMensajes,
     badgeConsultas,
-    toasts,
-    cerrarToast,
-    limpiarBadgeMensajes,
-    limpiarBadgeConsultas,
-    miId,
+    limpiarBadgeMensajes:  useCallback(() => setBadgeMensajes(0),  []),
+    limpiarBadgeConsultas: useCallback(() => setBadgeConsultas(0), []),
   }
 }

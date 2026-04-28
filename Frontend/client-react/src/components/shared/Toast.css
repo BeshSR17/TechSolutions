@@ -80,3 +80,42 @@
   .toast-container { right: 12px; left: 12px; bottom: 16px; }
   .toast { min-width: unset; width: 100%; }
 }
+
+/* Agregar al final de Toast.css */
+
+.toast-notif {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  min-width: 280px;
+  max-width: 400px;
+  border: 1px solid;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  pointer-events: all;
+  animation: toastIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toast-notif--mensaje,
+.toast-notif--consulta {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.toast-notif--consulta_nueva {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.3);
+  color: #c4b5fd;
+}
+
+.toast-notif-icono {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.toast-notif-body   { flex: 1; }
+.toast-notif-titulo { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.toast-notif-texto  { font-size: 12px; opacity: 0.8; line-height: 1.4; }

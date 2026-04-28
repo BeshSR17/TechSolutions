@@ -1,12 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
+// AdminDashboard.jsx
+import { useState, useEffect } from 'react'
 import './AdminDashboard.css'
 import ClientesView  from './ClientesView'
 import ProyectosView from './ProyectosView'
 import TareasView    from './TareasView'
 import UsuariosView  from './UsuariosView'
 import Perfil        from '../shared/Perfil'
-import ChatPage      from '../shared/ChatPage'   // ← reemplaza Chat
+import ChatPage      from '../shared/ChatPage'
+import { ToastProvider } from '../shared/Toast'
 import { supabase }  from '../../supabaseClient'
+import { useNotificaciones } from '../../hooks/useNotificaciones'
 
 const NAV_ITEMS = [
   { id: 'clientes',  icon: '👥', label: 'Clientes'  },
@@ -17,16 +20,23 @@ const NAV_ITEMS = [
   { id: 'perfil',    icon: '⚙️', label: 'Perfil'    },
 ]
 
-const AdminDashboard = ({ session, handleLogout, logo }) => {
-  const [seccionActual,    setSeccionActual]    = useState('clientes')
-  const [avatarUrl,        setAvatarUrl]        = useState(null)
-  const [collapsed,        setCollapsed]        = useState(false)
-  const [mensajesNoLeidos, setMensajesNoLeidos] = useState(0)
-
-  const seccionRef = useRef(seccionActual)
-  useEffect(() => { seccionRef.current = seccionActual }, [seccionActual])
+// Componente interno que usa useNotificaciones (debe estar DENTRO del ToastProvider)
+function AdminDashboardInner({ session, handleLogout, logo }) {
+  const [seccionActual, setSeccionActual] = useState('clientes')
+  const [avatarUrl,     setAvatarUrl]     = useState(null)
+  const [collapsed,     setCollapsed]     = useState(false)
 
   const adminId = session.user.id
+
+  const {
+    miId,
+    badgeMensajes,
+    badgeConsultas,
+    limpiarBadgeMensajes,
+    limpiarBadgeConsultas,
+  } = useNotificaciones()
+
+  const totalBadge = badgeMensajes + badgeConsultas
 
   // ── Marcar inactivo al cerrar ─────────────────────────────────────────────
   useEffect(() => {
@@ -45,55 +55,18 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
       .then(({ data }) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url) })
   }, [adminId])
 
-  // ── Badge de no leídos (mensajes + consultas pendientes) ──────────────────
-  useEffect(() => {
-    if (!adminId) return
-    const contar = async () => {
-      const { count: cMsg } = await supabase
-        .from('mensajes')
-        .select('id', { count: 'exact', head: true })
-        .eq('destinatario_id', adminId)
-        .or('leido.eq.false,leido.is.null')
-
-      const { count: cConsultas } = await supabase
-        .from('consultas')
-        .select('id', { count: 'exact', head: true })
-        .eq('estado', 'pendiente')
-
-      setMensajesNoLeidos((cMsg || 0) + (cConsultas || 0))
-    }
-    contar()
-  }, [adminId])
-
-  // ── Realtime badge en sidebar ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!adminId) return
-    const canal = supabase
-      .channel('adm-badge-realtime')
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'mensajes',
-        filter: `destinatario_id=eq.${adminId}`,
-      }, () => {
-        if (seccionRef.current !== 'chat') setMensajesNoLeidos(prev => prev + 1)
-      })
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'consultas',
-      }, () => {
-        if (seccionRef.current !== 'chat') setMensajesNoLeidos(prev => prev + 1)
-      })
-      .subscribe()
-    return () => supabase.removeChannel(canal)
-  }, [adminId])
-
   const navegarA = (id) => {
     setSeccionActual(id)
-    if (id === 'chat') setMensajesNoLeidos(0)
+    if (id === 'chat') {
+      limpiarBadgeMensajes()
+      limpiarBadgeConsultas()
+    }
   }
 
-  // Permite que UsuariosView abra el chat directamente en la sección mensajes
-  const abrirChatConUsuario = (usuario) => {
+  const abrirChatConUsuario = () => {
     setSeccionActual('chat')
-    setMensajesNoLeidos(0)
+    limpiarBadgeMensajes()
+    limpiarBadgeConsultas()
   }
 
   const tituloSeccion = NAV_ITEMS.find(n => n.id === seccionActual)
@@ -113,9 +86,8 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
 
         <nav className="adm-nav">
           {NAV_ITEMS.map(item => {
-            const isActive   = seccionActual === item.id
-            const esChatItem = item.id === 'chat'
-            const tieneNoti  = esChatItem && mensajesNoLeidos > 0
+            const isActive  = seccionActual === item.id
+            const tieneNoti = item.id === 'chat' && totalBadge > 0
             return (
               <button
                 key={item.id}
@@ -127,7 +99,7 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
                 {!collapsed && <span className="adm-nav-label">{item.label}</span>}
                 {tieneNoti && (
                   <span className="adm-nav-badge adm-nav-badge--count">
-                    {mensajesNoLeidos > 9 ? '9+' : mensajesNoLeidos}
+                    {totalBadge > 9 ? '9+' : totalBadge}
                   </span>
                 )}
               </button>
@@ -152,10 +124,10 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
             </div>
           </div>
           <div className="adm-topbar-right">
-            {mensajesNoLeidos > 0 && seccionActual !== 'chat' && (
+            {totalBadge > 0 && seccionActual !== 'chat' && (
               <button className="adm-msg-alert" onClick={() => navegarA('chat')}>
                 <span className="adm-chat-dot" />
-                {mensajesNoLeidos} notificación{mensajesNoLeidos !== 1 ? 'es' : ''} nueva{mensajesNoLeidos !== 1 ? 's' : ''}
+                {totalBadge} notificación{totalBadge !== 1 ? 'es' : ''} nueva{totalBadge !== 1 ? 's' : ''}
               </button>
             )}
             <div className="adm-user-chip">
@@ -174,13 +146,26 @@ const AdminDashboard = ({ session, handleLogout, logo }) => {
           {seccionActual === 'Tareas'    && <TareasView isAdmin={true} />}
           {seccionActual === 'Usuarios'  && <UsuariosView onChatClick={abrirChatConUsuario} />}
           {seccionActual === 'perfil'    && <Perfil session={session} onAvatarUpdate={setAvatarUrl} />}
-
-          {/* ── CHAT: ahora es solo <ChatPage /> sin props ni lógica extra ── */}
-          {seccionActual === 'chat' && <ChatPage />}
+          {seccionActual === 'chat'      && (
+            <ChatPage
+              badgeMensajes={badgeMensajes}
+              badgeConsultas={badgeConsultas}
+              limpiarBadgeMensajes={limpiarBadgeMensajes}
+              limpiarBadgeConsultas={limpiarBadgeConsultas}
+              miIdExterno={miId}
+            />
+          )}
         </main>
       </div>
     </div>
   )
 }
+
+// Wrapper que provee el ToastProvider antes de que useNotificaciones lo necesite
+const AdminDashboard = ({ session, handleLogout, logo }) => (
+  <ToastProvider>
+    <AdminDashboardInner session={session} handleLogout={handleLogout} logo={logo} />
+  </ToastProvider>
+)
 
 export default AdminDashboard

@@ -68,6 +68,9 @@ function ChatConsulta({ consulta, contacto, miId, esAdmin, onVolver, onCerrar })
   const cerrada = consulta.estado === 'cerrada'
 
   return (
+
+    
+
     <div className="cc-wrap">
       {/* Header */}
       <div className="cc-header">
@@ -154,6 +157,8 @@ function ChatConsulta({ consulta, contacto, miId, esAdmin, onVolver, onCerrar })
         </div>
       )}
     </div>
+
+    
   )
 }
 
@@ -389,17 +394,23 @@ export default function Consultas() {
     abrirConsulta({ ...consulta, estado: 'activa', admin_asignado_id: miId }, usuario)
   }
 
-  const handleCerrar = async (consultaId) => {
-    if (!window.confirm('¿Finalizar esta consulta? Ambos podrán seguir viendo el historial.')) return
-    await cerrarConsulta(consultaId)
+  const [modalCerrar, setModalCerrar] = useState(null)
+
+  const handleCerrar = (consultaId) => {
+    setModalCerrar(consultaId) // abre el modal
+  }
+  const confirmarCerrar = async () => {
+    await cerrarConsulta(modalCerrar)
+    setModalCerrar(null)
     setVista('lista')
   }
-
   const handleCrear = async (datos) => {
     const { error } = await crearConsulta(datos)
     if (!error) setVista('lista')
     return { error }
   }
+
+  
 
   // ── Render vistas ────────────────────────────────────────────────────────
   if (vista === 'nueva') {
@@ -411,16 +422,40 @@ export default function Consultas() {
     )
   }
 
+
   if (vista === 'chat' && consultaAct) {
     return (
-      <ChatConsulta
-        consulta={consultaAct}
-        contacto={contactoAct}
-        miId={miId}
-        esAdmin={esAdmin}
-        onVolver={() => setVista('lista')}
-        onCerrar={handleCerrar}
-      />
+      <>
+        <ChatConsulta
+          consulta={consultaAct}
+          contacto={contactoAct}
+          miId={miId}
+          esAdmin={esAdmin}
+          onVolver={() => setVista('lista')}
+          onCerrar={handleCerrar}
+        />
+
+        {/* Modal aquí también, para que sea visible desde la vista chat */}
+        {modalCerrar && (
+          <div className="modal-overlay" onClick={() => setModalCerrar(null)}>
+            <div className="modal-box" onClick={e => e.stopPropagation()}>
+              <div className="modal-icon">✓</div>
+              <h3 className="modal-titulo">¿Finalizar consulta?</h3>
+              <p className="modal-texto">
+                Ambos podrán seguir viendo el historial. Esta acción no se puede deshacer.
+              </p>
+              <div className="modal-actions">
+                <button className="modal-btn-cancelar" onClick={() => setModalCerrar(null)}>
+                  Cancelar
+                </button>
+                <button className="modal-btn-confirmar" onClick={confirmarCerrar}>
+                  Finalizar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     )
   }
 
@@ -457,6 +492,21 @@ export default function Consultas() {
           onNueva={() => setVista('nueva')}
         />
       )}
+
+      {modalCerrar && (
+        <div className="modal-overlay" onClick={() => setModalCerrar(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-icon">✓</div>
+            <h3 className="modal-titulo">¿Finalizar consulta?</h3>
+            <p className="modal-texto">Ambos podrán seguir viendo el historial. Esta acción no se puede deshacer.</p>
+            <div className="modal-actions">
+              <button className="modal-btn-cancelar" onClick={() => setModalCerrar(null)}>Cancelar</button>
+              <button className="modal-btn-confirmar" onClick={confirmarCerrar}>Finalizar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+
   )
 }
