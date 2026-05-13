@@ -4,8 +4,7 @@ import { useToast } from '../shared/Toast'
 import { validar, esValido, REGLAS } from '../../hooks/useValidation'
 import ConfirmModal from '../shared/ConfirmModal'
 import '../admin-design-system.css'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { generarPDFProyectos } from '../../hooks/pdfGenerator'
 
 const ESTADO_CFG = {
   'Planificación': { color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', dot: '#8b5cf6' },
@@ -326,64 +325,8 @@ const ProyectosView = () => {
     setProyectoDetalle({ ...p, _tareas: tareas })
   }
 
-  const generarPDFProyectos = () => {
-    const doc = new jsPDF('landscape')
-
-    doc.setFontSize(18)
-    doc.text('Reporte de Proyectos', 14, 20)
-
-    doc.setFontSize(10)
-    doc.text(`Fecha: ${new Date().toLocaleString()}`, 14, 28)
-
-    autoTable(doc, {
-      startY: 40,
-      head: [[
-        'Proyecto',
-        'Cliente',
-        'Estado',
-        'Fecha Inicio',
-        'Fecha Fin',
-        'Tareas',
-        'Responsables',
-        'Avance'
-      ]],
-      body: proyectosFiltrados.map(p => {
-        const tareas = todasLasTareas.filter(t => t.proyecto_id === p.id)
-
-        const responsables = [
-          ...new Set(
-            tareas
-              .map(t => t.perfiles?.nombre)
-              .filter(Boolean)
-          )
-        ].join(', ')
-
-        const avance = tareas.length
-          ? Math.round(
-              tareas.reduce((a, t) => a + (t.avance || 0), 0) / tareas.length
-            )
-          : 0
-
-        return [
-          p.nombre_proyecto || '',
-          p.clientes?.empresa || '',
-          p.estado || '',
-          formatFecha(p.fecha_inicio),
-          formatFecha(p.fecha_fin),
-          tareas.length,
-          responsables || '—',
-          `${avance}%`
-        ]
-      }),
-      styles: {
-        fontSize: 8
-      },
-      headStyles: {
-        fillColor: [16, 185, 129]
-      }
-    })
-
-    doc.save('Reporte_Proyectos.pdf')
+  const generarPDFProyectosHandler = () => {
+    generarPDFProyectos(proyectosFiltrados, stats, todasLasTareas, filtroEstado)
   }
 
   return (
@@ -406,10 +349,10 @@ const ProyectosView = () => {
         <input className="ads-search" placeholder="🔍  Buscar proyecto, cliente o descripción..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
         <button className="ads-btn ads-btn--primary" onClick={() => abrirForm()}>+ Nuevo Proyecto</button>
         <button
-          className="ads-btn ads-btn--secondary"
-          onClick={generarPDFProyectos}
+          className="ads-btn ads-btn--primary"
+          onClick={generarPDFProyectosHandler}
         >
-          📄 Exportar PDF
+          📄 Generar Reporte
         </button>
       </div>
 

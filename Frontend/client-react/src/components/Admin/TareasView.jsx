@@ -5,8 +5,7 @@ import { validar, esValido, REGLAS } from '../../hooks/useValidation'
 import { useTareaExtras } from '../../hooks/useTareaExtras'
 import ConfirmModal from '../shared/ConfirmModal'
 import '../admin-design-system.css'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { generarPDFTareas } from '../../hooks/pdfGenerator'
 
 const PRIORIDAD_CFG = {
   'Urgente': { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   icon: '🔴' },
@@ -371,50 +370,8 @@ const TareasView = ({ isAdmin }) => {
     } catch { toast.error('Error de conexión') }
   }
 
-  const generarPDFTareas = () => {
-    const doc = new jsPDF('landscape')
-
-    doc.setFontSize(18)
-    doc.text('Reporte de Tareas', 14, 20)
-
-    doc.setFontSize(10)
-    doc.text(`Fecha: ${new Date().toLocaleString()}`, 14, 28)
-
-    autoTable(doc, {
-      startY: 40,
-      head: [[
-        'Código',
-        'Título',
-        'Proyecto',
-        'Cliente',
-        'Responsable',
-        'Estado',
-        'Prioridad',
-        'Avance',
-        'Inicio',
-        'Finalización'
-      ]],
-      body: tareasFiltradas.map(t => [
-        t.codigo_serie || '',
-        t.titulo || '',
-        t.proyectos?.nombre_proyecto || '',
-        t.proyectos?.clientes?.empresa || '',
-        t.perfiles?.nombre || '',
-        t.estado || '',
-        t.prioridad || '',
-        `${t.avance || 0}%`,
-        formatFecha(t.fecha_inicio),
-        formatFecha(t.fecha_finalizacion)
-      ]),
-      styles: {
-        fontSize: 8
-      },
-      headStyles: {
-        fillColor: [59, 130, 246]
-      }
-    })
-
-    doc.save('Reporte_Tareas.pdf')
+  const generarPDFTareasHandler = () => {
+    generarPDFTareas(tareasFiltradas, stats, filtroEstado, filtroPrioridad, 'admin')
   }
 
 
@@ -448,10 +405,10 @@ const TareasView = ({ isAdmin }) => {
         </div>
         {isAdmin && <button className="ads-btn ads-btn--primary" onClick={() => abrirForm()}>+ Nueva Tarea</button>}
         <button
-          className="ads-btn ads-btn--secondary"
-          onClick={generarPDFTareas}
+          className="ads-btn ads-btn--primary"
+          onClick={generarPDFTareasHandler}
         >
-          📄 Exportar PDF
+          📄 Generar Reporte
         </button>
       </div>
 

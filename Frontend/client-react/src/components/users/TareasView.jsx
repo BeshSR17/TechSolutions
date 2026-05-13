@@ -3,8 +3,7 @@ import { apiClient } from '../../apiClient';
 import { useToast } from '../shared/Toast';
 import { useTareaExtras } from '../../hooks/useTareaExtras';
 import './TareasView.css';
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { generarPDFTareas } from '../../hooks/pdfGenerator'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -331,56 +330,9 @@ const TareasView = ({ usuarioId }) => {
     }
   };
 
-  const generarPDF = () => {
-    const doc = new jsPDF('landscape');
-
-    doc.setFontSize(20);
-    doc.text('Reporte de Mis Tareas', 14, 20);
-
-    doc.setFontSize(10);
-    doc.text(
-      `Generado: ${new Date().toLocaleString('es-GT')}`,
-      14,
-      28
-    );
-
-    autoTable(doc, {
-      startY: 38,
-      head: [[
-        'Código',
-        'Título',
-        'Proyecto',
-        'Estado',
-        'Prioridad',
-        'Avance',
-        'Fecha Inicio',
-        'Fecha Fin'
-      ]],
-      body: tareasFiltradas.map(t => [
-        t.codigo_serie || '',
-        t.titulo || '',
-        t.proyectos?.nombre_proyecto || '',
-        t.estado || '',
-        t.prioridad || '',
-        `${t.avance || 0}%`,
-        formatFecha(t.fecha_inicio),
-        formatFecha(t.fecha_finalizacion)
-      ]),
-      styles: {
-        fontSize: 8,
-        cellPadding: 3,
-        valign: 'middle'
-      },
-      headStyles: {
-        fillColor: [59, 130, 246]
-      },
-      alternateRowStyles: {
-        fillColor: [245, 247, 250]
-      }
-    });
-
-    doc.save('Mis_Tareas.pdf');
-  };
+  const generarPDFHandler = () => {
+    generarPDFTareas(tareasFiltradas, stats, filtroEstado, filtroPrioridad, 'usuario')
+  }
 
   const stats = {
     total:      tareas.length,
@@ -432,7 +384,7 @@ const TareasView = ({ usuarioId }) => {
         </div>
         <button
           className="tv-btn tv-btn--primary"
-          onClick={generarPDF}
+          onClick={generarPDFHandler}
         >
           📄 Exportar PDF
         </button>

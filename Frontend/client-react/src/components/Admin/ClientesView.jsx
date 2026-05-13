@@ -4,8 +4,7 @@ import { useToast } from '../shared/Toast'
 import { validar, esValido, REGLAS } from '../../hooks/useValidation'
 import ConfirmModal from '../shared/ConfirmModal'
 import '../admin-design-system.css'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { generarPDFClientes } from '../../hooks/pdfGenerator'
 
 // ── Configs ───────────────────────────────────────────────────────────────────
 const ESTADO_CFG = {
@@ -305,42 +304,8 @@ const ClientesView = () => {
     })
   }
 
-  const generarPDFClientes = () => {
-    const doc = new jsPDF('landscape')
-
-    doc.setFontSize(18)
-    doc.text('Reporte de Clientes', 14, 20)
-
-    doc.setFontSize(10)
-    doc.text(`Fecha: ${new Date().toLocaleString()}`, 14, 28)
-
-    autoTable(doc, {
-      startY: 40,
-      head: [[
-        'Empresa',
-        'Contacto',
-        'Email',
-        'Teléfono',
-        'Estado',
-        'Proyectos'
-      ]],
-      body: clientesFiltrados.map(c => [
-        c.empresa || '',
-        c.nombre_contacto || '',
-        c.email || '',
-        c.telefono || '—',
-        c.estado || '',
-        c.proyectos?.length || 0
-      ]),
-      styles: {
-        fontSize: 9
-      },
-      headStyles: {
-        fillColor: [245, 158, 11]
-      }
-    })
-
-    doc.save('Reporte_Clientes.pdf')
+  const generarPDFClientesHandler = () => {
+    generarPDFClientes(clientesFiltrados, stats, filtroEstado)
   }
 
   return (
@@ -371,10 +336,10 @@ const ClientesView = () => {
           value={busqueda} onChange={e => setBusqueda(e.target.value)} />
         <button className="ads-btn ads-btn--primary" onClick={() => abrirForm()}>+ Nuevo Cliente</button>
         <button
-            className="ads-btn ads-btn--secondary"
-            onClick={generarPDFClientes}
+            className="ads-btn ads-btn--primary"
+            onClick={generarPDFClientesHandler}
           >
-            📄 Exportar PDF
+            📄 Generar Reporte
           </button>
       </div>
 
