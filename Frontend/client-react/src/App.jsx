@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import AdminDashboard from './components/Admin/AdminDashboard'
 import UsersDashboard from './components/users/UsersDashboard'
+import ClienteDashboard from './components/Cliente/ClientDashboard'
 import { ToastProvider, useToast } from './components/shared/Toast'
 import './App.css'
 
@@ -98,7 +99,7 @@ function AppContent() {
         toast.error('Error al registrarse: ' + error.message)
       }
     } else {
-      toast.success('¡Cuenta creada! Revisa tu correo para validar tu cuenta.')
+      toast.success('¡Cuenta creada!')
       setAuthTab('login')
     }
     setLoading(false)
@@ -151,7 +152,8 @@ function AppContent() {
   if (session && rol) {
     return rol === 'Administrador'
       ? <AdminDashboard session={session} handleLogout={handleLogout} logo={LOGO_URL} />
-      : <UsersDashboard session={session} handleLogout={handleLogout} logo={LOGO_URL} />
+    : rol === 'Usuario' ? <UsersDashboard session={session} handleLogout={handleLogout} logo={LOGO_URL} />
+    : <ClienteDashboard session={session} handleLogout={handleLogout} logo={LOGO_URL}/>
   }
 
   // ── Recovery mode ───────────────────────────────────────────────────────────
